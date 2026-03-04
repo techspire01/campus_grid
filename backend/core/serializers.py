@@ -167,7 +167,7 @@ class UserSerializer(serializers.ModelSerializer):
 class StaffSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
-    department_name = serializers.CharField(source='department.name', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True, allow_null=True)
     remaining_hours = serializers.SerializerMethodField()
     
     class Meta:

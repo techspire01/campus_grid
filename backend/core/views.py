@@ -267,7 +267,10 @@ class StaffViewSet(viewsets.ModelViewSet):
         if user.is_super_admin():
             return Staff.objects.all()
         elif user.is_college_admin() and user.college:
-            return Staff.objects.filter(department__college=user.college)
+            return Staff.objects.filter(
+                Q(department__college=user.college) |
+                Q(department__isnull=True, user__college=user.college)
+            )
         elif user.is_hod() and user.department:
             return Staff.objects.filter(department=user.department)
         return Staff.objects.none()

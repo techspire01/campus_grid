@@ -53,7 +53,7 @@ class User(AbstractUser):
 
 class Staff(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile')
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='staff_members')
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
     
     max_workload_hours = models.IntegerField(default=20)  # Admin sets this
     current_workload_hours = models.FloatField(default=0.0)
@@ -68,7 +68,8 @@ class Staff(models.Model):
         unique_together = ('user', 'department')
     
     def __str__(self):
-        return f"{self.user.get_full_name()} - {self.department.name}"
+        department_name = self.department.name if self.department else 'No Department'
+        return f"{self.user.get_full_name()} - {department_name}"
     
     def remaining_workload_hours(self):
         return self.max_workload_hours - self.current_workload_hours

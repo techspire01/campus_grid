@@ -37,14 +37,26 @@ function AdminPanelPage() {
   const user = useAuthStore((state) => state.user);
   const [departments, setDepartments] = useState([]);
   const [staffUsers, setStaffUsers] = useState([]);
+  const [staffProfiles, setStaffProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState(null);
+  const [openStaffDialog, setOpenStaffDialog] = useState(false);
+  const [staffEditForm, setStaffEditForm] = useState({
+    id: null,
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    role: 'STAFF',
+    department: '',
+    password: '',
+  });
   const [formData, setFormData] = useState({
     name: '',
     code: '',
-    years: { first: false, second: false, third: false },
-    sections: { a: false, b: false },
+    years: { first: true, second: true, third: true },
+    sections: { a: true, b: false },
     hod: { first_name: '', last_name: '', email: '', phone: '', password: '' },
     staff: [],
   });
@@ -71,6 +83,10 @@ function AdminPanelPage() {
         : await api.get('/users/');
       const usersData = usersRes.data.results || usersRes.data;
       setStaffUsers(usersData.filter((entry) => ['HOD', 'STAFF'].includes(entry.role)));
+
+      const staffRes = await api.get('/staff/');
+      const staffData = staffRes.data.results || staffRes.data;
+      setStaffProfiles(staffData);
     } catch (error) {
       showSnackbar('Failed to load admin data', 'error');
     } finally {
@@ -83,24 +99,64 @@ function AdminPanelPage() {
     setFormData({
       name: '',
       code: '',
-      years: { first: false, second: false, third: false },
-      sections: { a: false, b: false },
+      years: { first: true, second: true, third: true },
+      sections: { a: true, b: false },
       hod: { first_name: '', last_name: '', email: '', phone: '', password: '' },
       staff: [],
     });
     setOpenDialog(true);
   };
 
-  const handleOpenEdit = (department) => {
+  const handleOpenEdit = async (department) => {
     setEditingDepartment(department);
+
+    const departmentUsers = staffUsers.filter(
+      (entry) => String(entry.department) === String(department.id)
+    );
+    const existingHod = departmentUsers.find((entry) => entry.role === 'HOD');
+    const existingStaff = departmentUsers
+      .filter((entry) => entry.role !== 'HOD')
+      .map((entry) => ({
+        first_name: entry.first_name || '',
+        last_name: entry.last_name || '',
+        email: entry.email || '',
+        phone: entry.phone || '',
+        password: '',
+        position: entry.role || 'STAFF',
+      }));
+
+    const years = { first: false, second: false, third: false };
+    const sections = { a: false, b: false };
+
+    try {
+      const classRes = await api.get(`/classes/?department=${department.id}`);
+      const classData = classRes.data.results || classRes.data;
+
+      years.first = classData.some((entry) => entry.year === 1);
+      years.second = classData.some((entry) => entry.year === 2);
+      years.third = classData.some((entry) => entry.year === 3);
+
+      sections.a = classData.some((entry) => entry.section === 'A');
+      sections.b = classData.some((entry) => entry.section === 'B');
+    } catch (error) {
+      showSnackbar('Failed to load existing classes for this department', 'warning');
+    }
+
     setFormData({
       name: department.name,
       code: department.code,
-      years: { first: false, second: false, third: false },
-      sections: { a: false, b: false },
-      hod: { first_name: '', last_name: '', email: '', phone: '', password: '' },
-      staff: [],
+      years,
+      sections,
+      hod: {
+        first_name: existingHod?.first_name || '',
+        last_name: existingHod?.last_name || '',
+        email: existingHod?.email || '',
+        phone: existingHod?.phone || '',
+        password: '',
+      },
+      staff: existingStaff,
     });
+
     setOpenDialog(true);
   };
 
@@ -132,10 +188,10 @@ function AdminPanelPage() {
         const departmentRes = await api.post('/departments/', payload);
         departmentId = departmentRes.data.id;
         departmentCollegeId = departmentRes.data.college;
-        await createClassesForDepartment(departmentId);
         showSnackbar('Department created successfully', 'success');
       }
 
+      await syncClassesForDepartment(departmentId);
       await createAccountsForDepartment(departmentId, departmentCollegeId);
 
       handleCloseDialog();
@@ -161,6 +217,63 @@ function AdminPanelPage() {
 
   const showSnackbar = (message, severity) => {
     setSnackbar({ open: true, message, severity });
+  };
+
+  const handleOpenStaffEdit = (entry) => {
+    setStaffEditForm({
+      id: entry.id,
+      first_name: entry.first_name || '',
+      last_name: entry.last_name || '',
+      email: entry.email || '',
+      phone: entry.phone || '',
+      role: entry.role || 'STAFF',
+      department: entry.department || '',
+      password: '',
+    });
+    setOpenStaffDialog(true);
+  };
+
+  const handleSaveStaffEdit = async () => {
+    if (!staffEditForm.id) {
+      showSnackbar('Invalid staff account', 'error');
+      return;
+    }
+
+    try {
+      const departmentValue = staffEditForm.department || null;
+      await api.patch(`/users/${staffEditForm.id}/`, {
+        first_name: staffEditForm.first_name,
+        last_name: staffEditForm.last_name,
+        email: staffEditForm.email,
+        phone: staffEditForm.phone,
+        role: staffEditForm.role,
+        department: departmentValue,
+        ...(staffEditForm.password ? { password: staffEditForm.password } : {}),
+      });
+
+      const existingProfile = staffProfiles.find((profile) => profile.user === staffEditForm.id);
+      if (existingProfile) {
+        await api.patch(`/staff/${existingProfile.id}/`, {
+          department: departmentValue,
+        });
+      } else if (departmentValue) {
+        await api.post('/staff/', {
+          user: staffEditForm.id,
+          department: departmentValue,
+        });
+      }
+
+      setOpenStaffDialog(false);
+      showSnackbar('Staff profile updated successfully', 'success');
+      fetchData();
+    } catch (error) {
+      const message = error.response?.data?.department?.[0]
+        || error.response?.data?.role?.[0]
+        || error.response?.data?.email?.[0]
+        || error.response?.data?.detail
+        || 'Failed to update staff profile';
+      showSnackbar(message, 'error');
+    }
   };
 
   const createAccountsForDepartment = async (departmentId, departmentCollegeId) => {
@@ -253,7 +366,7 @@ function AdminPanelPage() {
     }));
   };
 
-  const createClassesForDepartment = async (departmentId) => {
+  const syncClassesForDepartment = async (departmentId) => {
     const selectedYears = [];
     if (formData.years.first) selectedYears.push(1);
     if (formData.years.second) selectedYears.push(2);
@@ -263,31 +376,63 @@ function AdminPanelPage() {
     if (formData.sections.a) selectedSections.push('A');
     if (formData.sections.b) selectedSections.push('B');
 
-    if (selectedYears.length === 0 || selectedSections.length === 0) {
-      return;
-    }
+    try {
+      const existingRes = await api.get(`/classes/?department=${departmentId}`);
+      const existingClasses = existingRes.data.results || existingRes.data;
 
-    let createdCount = 0;
-    for (const year of selectedYears) {
-      for (const section of selectedSections) {
+      const desiredClasses = [];
+      for (const year of selectedYears) {
+        for (const section of selectedSections) {
+          desiredClasses.push({ year, section });
+        }
+      }
+
+      const classesToDelete = existingClasses.filter(
+        (existing) => !desiredClasses.some(
+          (desired) => desired.year === existing.year && desired.section === existing.section
+        )
+      );
+
+      const classesToCreate = desiredClasses.filter(
+        (desired) => !existingClasses.some(
+          (existing) => existing.year === desired.year && existing.section === desired.section
+        )
+      );
+
+      let deletedCount = 0;
+      let createdCount = 0;
+
+      for (const cls of classesToDelete) {
+        try {
+          await api.delete(`/classes/${cls.id}/`);
+          deletedCount += 1;
+        } catch (error) {
+          showSnackbar('Error deleting class record', 'warning');
+        }
+      }
+
+      for (const cls of classesToCreate) {
         try {
           await api.post('/classes/', {
             department: departmentId,
-            year,
-            section,
+            year: cls.year,
+            section: cls.section,
           });
           createdCount += 1;
         } catch (error) {
           const duplicateError = error.response?.data?.non_field_errors?.[0]?.toLowerCase().includes('unique');
           if (!duplicateError) {
-            showSnackbar('Some classes could not be created', 'warning');
+            showSnackbar('Error creating class record', 'warning');
           }
         }
       }
-    }
 
-    if (createdCount > 0) {
-      showSnackbar(`${createdCount} class(es) created`, 'success');
+      if (deletedCount > 0 || createdCount > 0) {
+        if (deletedCount > 0) showSnackbar(`${deletedCount} class(es) removed`, 'success');
+        if (createdCount > 0) showSnackbar(`${createdCount} class(es) created`, 'success');
+      }
+    } catch (error) {
+      showSnackbar('Error syncing classes', 'warning');
     }
   };
 
@@ -377,12 +522,13 @@ function AdminPanelPage() {
               <TableCell>Email</TableCell>
               <TableCell>Department</TableCell>
               <TableCell>Position</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {staffUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} align="center">No staff accounts found</TableCell>
+                <TableCell colSpan={5} align="center">No staff accounts found</TableCell>
               </TableRow>
             ) : (
               staffUsers.map((entry) => (
@@ -391,6 +537,11 @@ function AdminPanelPage() {
                   <TableCell>{entry.email}</TableCell>
                   <TableCell>{entry.department_name || '-'}</TableCell>
                   <TableCell>{entry.role === 'HOD' ? 'HOD' : 'Staff'}</TableCell>
+                  <TableCell align="right">
+                    <IconButton size="small" onClick={() => handleOpenStaffEdit(entry)}>
+                      <Edit />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -615,6 +766,94 @@ function AdminPanelPage() {
           <Button onClick={handleSubmit} variant="contained">
             {editingDepartment ? 'Update' : 'Create'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={openStaffDialog} onClose={() => setOpenStaffDialog(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Edit Staff Account</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={1} sx={{ mt: 0.5 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                label="First Name"
+                fullWidth
+                value={staffEditForm.first_name}
+                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, first_name: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                label="Last Name"
+                fullWidth
+                value={staffEditForm.last_name}
+                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, last_name: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                label="Email"
+                fullWidth
+                value={staffEditForm.email}
+                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, email: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                label="Phone"
+                fullWidth
+                value={staffEditForm.phone}
+                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth margin="dense">
+                <InputLabel>Position</InputLabel>
+                <Select
+                  label="Position"
+                  value={staffEditForm.role}
+                  onChange={(e) => setStaffEditForm((prev) => ({ ...prev, role: e.target.value }))}
+                >
+                  <MenuItem value="STAFF">Staff</MenuItem>
+                  <MenuItem value="HOD">HOD</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth margin="dense">
+                <InputLabel>Department</InputLabel>
+                <Select
+                  label="Department"
+                  value={staffEditForm.department}
+                  onChange={(e) => setStaffEditForm((prev) => ({ ...prev, department: e.target.value }))}
+                >
+                  <MenuItem value="">No Department</MenuItem>
+                  {departments.map((department) => (
+                    <MenuItem key={department.id} value={department.id}>
+                      {department.code} - {department.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                margin="dense"
+                label="New Password (optional)"
+                type="password"
+                fullWidth
+                value={staffEditForm.password}
+                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, password: e.target.value }))}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenStaffDialog(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveStaffEdit}>Save</Button>
         </DialogActions>
       </Dialog>
 
