@@ -5,7 +5,7 @@ import {
   DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem,
   Chip, Grid, Alert, Snackbar, Pagination, Switch, FormControlLabel
 } from '@mui/material';
-import { Add, Edit, Delete, FilterList } from '@mui/icons-material';
+import { Add, Edit, Delete } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuthStore } from '../store';
 
@@ -15,9 +15,6 @@ function LabsPage() {
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingLab, setEditingLab] = useState(null);
-  const [filters, setFilters] = useState({
-    is_available: ''
-  });
   const [formData, setFormData] = useState({
     name: '',
     college: user?.college?.id || '',
@@ -31,13 +28,12 @@ function LabsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [filters, page]);
+  }, [page]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filters.is_available !== '') params.append('is_available', filters.is_available);
       if (user?.college?.id) params.append('college', user.college.id);
       params.append('page', page);
 
@@ -142,10 +138,7 @@ function LabsPage() {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleFilterChange = (field, value) => {
-    setFilters(prev => ({ ...prev, [field]: value }));
-    setPage(1);
-  };
+
 
   return (
     <Box sx={{ p: 3 }}>
@@ -160,22 +153,10 @@ function LabsPage() {
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
-            <FilterList sx={{ mr: 1, verticalAlign: 'middle' }} />
-            <Typography variant="subtitle1" component="span">Filters:</Typography>
+            
           </Grid>
           <Grid item xs={12} md={8}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Availability</InputLabel>
-              <Select
-                value={filters.is_available}
-                label="Availability"
-                onChange={(e) => handleFilterChange('is_available', e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="true">Available</MenuItem>
-                <MenuItem value="false">Unavailable</MenuItem>
-              </Select>
-            </FormControl>
+            
           </Grid>
         </Grid>
       </Paper>

@@ -17,6 +17,7 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuthStore } from '../store';
 
@@ -98,28 +99,46 @@ function ClassesPage() {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell>Class</TableCell>
               <TableCell>Department</TableCell>
               <TableCell>Year</TableCell>
               <TableCell>Section</TableCell>
+              <TableCell>Subject Codes</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={3} align="center">Loading...</TableCell>
+                <TableCell colSpan={5} align="center">Loading...</TableCell>
               </TableRow>
             ) : classes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} align="center">No classes found</TableCell>
+                <TableCell colSpan={5} align="center">No classes found</TableCell>
               </TableRow>
             ) : (
-              classes.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.department_code} - {entry.department_name}</TableCell>
-                  <TableCell>{entry.year_display || `Year ${entry.year}`}</TableCell>
-                  <TableCell>{entry.section_display || entry.section}</TableCell>
-                </TableRow>
-              ))
+              classes.map((entry) => {
+                const subjectCodes = (entry.assigned_subjects || [])
+                  .filter((subject) => subject.code)
+                  .map((subject) => subject.code)
+                  .join(', ');
+                return (
+                  <TableRow key={entry.id}>
+                    <TableCell>
+                      <Typography
+                        component={Link}
+                        to={`/classes/${entry.id}`}
+                        sx={{ textDecoration: 'none' }}
+                      >
+                        {entry.department_code} - {entry.year_display || `Year ${entry.year}`} - {entry.section_display || entry.section}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{entry.department_code} - {entry.department_name}</TableCell>
+                    <TableCell>{entry.year_display || `Year ${entry.year}`}</TableCell>
+                    <TableCell>{entry.section_display || entry.section}</TableCell>
+                    <TableCell>{subjectCodes || '-'}</TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

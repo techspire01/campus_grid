@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, IconButton, TextField, Dialog, DialogTitle,
   DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem,
-  Chip, Grid, Alert, Snackbar, Pagination, FormControlLabel
+  Chip, Grid, Alert, Snackbar, FormControlLabel
 } from '@mui/material';
 import { Add, Edit, Delete, FilterList } from '@mui/icons-material';
 import api from '../services/api';
@@ -26,6 +26,7 @@ function SubjectsPage() {
     code: '',
     college: user?.college?.id || '',
     department: '',
+    assignment_type: 'department',
     is_common: false,
     is_lab: false,
     hours_per_week: 3,
@@ -33,12 +34,10 @@ function SubjectsPage() {
     semester: ''
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchData();
-  }, [filters, page]);
+  }, [filters]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -48,16 +47,28 @@ function SubjectsPage() {
       if (filters.is_common !== '') params.append('is_common', filters.is_common);
       if (filters.is_lab !== '') params.append('is_lab', filters.is_lab);
       if (user?.college?.id) params.append('college', user.college.id);
-      params.append('page', page);
-
-      const [subjectsRes, deptsRes] = await Promise.all([
-        api.get(`/subjects/?${params.toString()}`),
+      const [deptsRes] = await Promise.all([
         api.get('/departments/')
       ]);
-
-      setSubjects(subjectsRes.data.results || subjectsRes.data);
       setDepartments(deptsRes.data.results || deptsRes.data);
-      setTotalPages(Math.ceil((subjectsRes.data.count || subjectsRes.data.length) / 10) || 1);
+
+      let nextUrl = `/subjects/?${params.toString()}`;
+      const collectedSubjects = [];
+
+      while (nextUrl) {
+        const subjectsRes = await api.get(nextUrl);
+        const payload = subjectsRes.data;
+
+        if (Array.isArray(payload)) {
+          setSubjects(payload);
+          return;
+        }
+
+        collectedSubjects.push(...(payload.results || []));
+        nextUrl = payload.next ? payload.next.replace('http://localhost:8000/api', '') : null;
+      }
+
+      setSubjects(collectedSubjects);
     } catch (error) {
       console.error('Error fetching data:', error);
       showSnackbar('Error loading data', 'error');
@@ -74,6 +85,7 @@ function SubjectsPage() {
         code: subject.code,
         college: subject.college,
         department: subject.department || '',
+        assignment_type: subject.is_common ? 'class' : 'department',
         is_common: subject.is_common,
         is_lab: subject.is_lab,
         hours_per_week: subject.hours_per_week,
@@ -87,6 +99,7 @@ function SubjectsPage() {
         code: '',
         college: user?.college?.id || '',
         department: '',
+        assignment_type: 'department',
         is_common: false,
         is_lab: false,
         hours_per_week: 3,
@@ -104,9 +117,15 @@ function SubjectsPage() {
 
   const handleSubmit = async () => {
     try {
+      if (formData.assignment_type === 'department' && !formData.department) {
+        showSnackbar('Please select a department for department-handled subjects', 'warning');
+        return;
+      }
+
       const data = {
         ...formData,
-        department: formData.department || null,
+        is_common: formData.assignment_type === 'class',
+        department: formData.assignment_type === 'class' ? null : (formData.department || null),
         year: formData.year || null,
         semester: formData.semester || null
       };
@@ -144,7 +163,6 @@ function SubjectsPage() {
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
-    setPage(1);
   };
 
   return (
@@ -281,16 +299,6 @@ function SubjectsPage() {
         </Table>
       </TableContainer>
 
-      {/* Pagination */}
-      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-        <Pagination
-          count={totalPages}
-          page={page}
-          onChange={(e, value) => setPage(value)}
-          color="primary"
-        />
-      </Box>
-
       {/* Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{editingSubject ? 'Edit Subject' : 'Add Subject'}</DialogTitle>
@@ -314,12 +322,30 @@ function SubjectsPage() {
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
+                <InputLabel>Assign To</InputLabel>
+                <Select
+                  value={formData.assignment_type}
+                  label="Assign To"
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    assignment_type: e.target.value,
+                    is_common: e.target.value === 'class',
+                    department: e.target.value === 'class' ? '' : formData.department,
+                  })}
+                >
+                  <MenuItem value="department">Department (handled by department)</MenuItem>
+                  <MenuItem value="class">Class Subject (available for classes)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
                 <InputLabel>Department</InputLabel>
                 <Select
                   value={formData.department}
                   label="Department"
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  disabled={formData.is_common}
+                  disabled={formData.assignment_type === 'class'}
                 >
                   <MenuItem value="">Select Department</MenuItem>
                   {departments.map(dept => (
@@ -370,16 +396,6 @@ function SubjectsPage() {
             </Grid>
             <Grid item xs={6}>
               <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-                <FormControlLabel
-                  control={
-                    <input
-                      type="checkbox"
-                      checked={formData.is_common}
-                      onChange={(e) => setFormData({ ...formData, is_common: e.target.checked, department: e.target.checked ? '' : formData.department })}
-                    />
-                  }
-                  label="Common Subject"
-                />
                 <FormControlLabel
                   control={
                     <input
