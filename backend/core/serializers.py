@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import re
-from core.models import College, Department, Lab
+from core.models import College, Department, Lab, Class
 from accounts.models import User, Staff
 
 
@@ -39,6 +39,18 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
         attrs['college'] = default_college
         return attrs
+
+
+class ClassSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    department_code = serializers.CharField(source='department.code', read_only=True)
+    year_display = serializers.CharField(source='get_year_display', read_only=True)
+    section_display = serializers.CharField(source='get_section_display', read_only=True)
+    
+    class Meta:
+        model = Class
+        fields = ['id', 'department', 'department_name', 'department_code', 'year', 'year_display', 'section', 'section_display', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class LabSerializer(serializers.ModelSerializer):

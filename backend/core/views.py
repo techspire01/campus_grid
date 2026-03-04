@@ -5,9 +5,9 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 
-from core.models import College, Department, Lab
+from core.models import College, Department, Lab, Class
 from accounts.models import User, Staff
-from core.serializers import CollegeSerializer, DepartmentSerializer, LabSerializer, UserSerializer, StaffSerializer, StaffDetailSerializer
+from core.serializers import CollegeSerializer, DepartmentSerializer, ClassSerializer, LabSerializer, UserSerializer, StaffSerializer, StaffDetailSerializer
 from core.permissions import IsSuperAdmin, IsSuperAdminOrCollegeAdmin
 
 
@@ -120,6 +120,34 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except User.DoesNotExist:
             return Response({'detail': 'HOD not assigned'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ClassViewSet(viewsets.ModelViewSet):
+    """
+    CRUD operations for Classes.
+    - Manage classes (year and section) for departments
+    """
+    queryset = Class.objects.all()
+    serializer_class = ClassSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['department', 'year', 'section']
+    search_fields = ['department__name', 'department__code']
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_super_admin():
+            return Class.objects.all()
+        elif user.college:
+            return Class.objects.filter(department__college=user.college)
+        return Class.objects.none()
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsSuperAdminOrCollegeAdmin]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
 
 
 class LabViewSet(viewsets.ModelViewSet):

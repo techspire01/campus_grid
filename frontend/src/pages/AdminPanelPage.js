@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   CardContent,
   Divider,
   Dialog,
@@ -11,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   Grid,
   IconButton,
   InputLabel,
@@ -41,6 +43,8 @@ function AdminPanelPage() {
   const [formData, setFormData] = useState({
     name: '',
     code: '',
+    years: { first: false, second: false, third: false },
+    sections: { a: false, b: false },
     hod: { first_name: '', last_name: '', email: '', phone: '', password: '' },
     staff: [],
   });
@@ -79,6 +83,8 @@ function AdminPanelPage() {
     setFormData({
       name: '',
       code: '',
+      years: { first: false, second: false, third: false },
+      sections: { a: false, b: false },
       hod: { first_name: '', last_name: '', email: '', phone: '', password: '' },
       staff: [],
     });
@@ -90,6 +96,8 @@ function AdminPanelPage() {
     setFormData({
       name: department.name,
       code: department.code,
+      years: { first: false, second: false, third: false },
+      sections: { a: false, b: false },
       hod: { first_name: '', last_name: '', email: '', phone: '', password: '' },
       staff: [],
     });
@@ -124,6 +132,7 @@ function AdminPanelPage() {
         const departmentRes = await api.post('/departments/', payload);
         departmentId = departmentRes.data.id;
         departmentCollegeId = departmentRes.data.college;
+        await createClassesForDepartment(departmentId);
         showSnackbar('Department created successfully', 'success');
       }
 
@@ -242,6 +251,44 @@ function AdminPanelPage() {
       ...prev,
       staff: prev.staff.filter((_, entryIndex) => entryIndex !== index),
     }));
+  };
+
+  const createClassesForDepartment = async (departmentId) => {
+    const selectedYears = [];
+    if (formData.years.first) selectedYears.push(1);
+    if (formData.years.second) selectedYears.push(2);
+    if (formData.years.third) selectedYears.push(3);
+
+    const selectedSections = [];
+    if (formData.sections.a) selectedSections.push('A');
+    if (formData.sections.b) selectedSections.push('B');
+
+    if (selectedYears.length === 0 || selectedSections.length === 0) {
+      return;
+    }
+
+    let createdCount = 0;
+    for (const year of selectedYears) {
+      for (const section of selectedSections) {
+        try {
+          await api.post('/classes/', {
+            department: departmentId,
+            year,
+            section,
+          });
+          createdCount += 1;
+        } catch (error) {
+          const duplicateError = error.response?.data?.non_field_errors?.[0]?.toLowerCase().includes('unique');
+          if (!duplicateError) {
+            showSnackbar('Some classes could not be created', 'warning');
+          }
+        }
+      }
+    }
+
+    if (createdCount > 0) {
+      showSnackbar(`${createdCount} class(es) created`, 'success');
+    }
   };
 
   return (
@@ -369,6 +416,89 @@ function AdminPanelPage() {
             value={formData.code}
             onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value }))}
           />
+
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+            Class Years
+          </Typography>
+          <Grid container spacing={1}>
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={formData.years.first}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      years: { ...prev.years, first: e.target.checked },
+                    }))}
+                  />
+                )}
+                label="1st Year"
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={formData.years.second}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      years: { ...prev.years, second: e.target.checked },
+                    }))}
+                  />
+                )}
+                label="2nd Year"
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={formData.years.third}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      years: { ...prev.years, third: e.target.checked },
+                    }))}
+                  />
+                )}
+                label="3rd Year"
+              />
+            </Grid>
+          </Grid>
+
+          <Typography variant="subtitle1" sx={{ mt: 1, mb: 1 }}>
+            Sections
+          </Typography>
+          <Grid container spacing={1}>
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={formData.sections.a}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      sections: { ...prev.sections, a: e.target.checked },
+                    }))}
+                  />
+                )}
+                label="Section A"
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={formData.sections.b}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      sections: { ...prev.sections, b: e.target.checked },
+                    }))}
+                  />
+                )}
+                label="Section B"
+              />
+            </Grid>
+          </Grid>
 
           <Divider sx={{ my: 2 }} />
           <Typography variant="subtitle1" sx={{ mb: 1 }}>

@@ -54,3 +54,32 @@ class Lab(models.Model):
     def __str__(self):
         return f"{self.name} ({self.code})"
 
+
+
+class Class(models.Model):
+    YEAR_CHOICES = [
+        (1, '1st Year'),
+        (2, '2nd Year'),
+        (3, '3rd Year'),
+    ]
+    
+    SECTION_CHOICES = [
+        ('A', 'Section A'),
+        ('B', 'Section B'),
+    ]
+    
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='classes')
+    year = models.IntegerField(choices=YEAR_CHOICES)
+    section = models.CharField(max_length=1, choices=SECTION_CHOICES)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'core_class'
+        unique_together = ('department', 'year', 'section')
+        verbose_name_plural = 'Classes'
+    
+    def __str__(self):
+        return f"{self.department.code} - Year {self.year} Section {self.section}"
+

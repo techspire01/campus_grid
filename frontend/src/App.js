@@ -11,6 +11,7 @@ import ApprovalPage from './pages/ApprovalPage';
 import WorkloadPage from './pages/WorkloadPage';
 import SubjectsPage from './pages/SubjectsPage';
 import LabsPage from './pages/LabsPage';
+import ClassesPage from './pages/ClassesPage';
 import CommonTimetablePage from './pages/CommonTimetablePage';
 import DepartmentTimetablePage from './pages/DepartmentTimetablePage';
 import FinalTimetablePage from './pages/FinalTimetablePage';
@@ -68,6 +69,7 @@ function App() {
                     <Route path="/admin" element={<AdminPanelPage />} />
                     <Route path="/subjects" element={<SubjectsPage />} />
                     <Route path="/labs" element={<LabsPage />} />
+                    <Route path="/classes" element={<ClassesPage />} />
                     <Route path="/common-timetable" element={<CommonTimetablePage />} />
                     <Route path="/department-timetable" element={<DepartmentTimetablePage />} />
                     <Route path="/timetable" element={<TimetableGridPage />} />

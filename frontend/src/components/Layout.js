@@ -35,6 +35,7 @@ import ScienceIcon from '@mui/icons-material/Science';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import GroupWorkIcon from '@mui/icons-material/GroupWork';
 import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
+import ClassIcon from '@mui/icons-material/Class';
 
 const DRAWER_WIDTH = 240;
 
@@ -65,6 +66,7 @@ function Layout({ children }) {
     { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD', 'LAB_INCHARGE', 'COMMON_SUBJECT_HEAD', 'STAFF', 'STUDENT'] },
     { label: 'Subjects', icon: <BookIcon />, path: '/subjects', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
     { label: 'Labs', icon: <ScienceIcon />, path: '/labs', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
+    { label: 'Classes', icon: <ClassIcon />, path: '/classes', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
     { label: 'Common Timetable', icon: <ScheduleIcon />, path: '/common-timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
     { label: 'Department Timetable', icon: <GroupWorkIcon />, path: '/department-timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD'] },
     { label: 'Timetable Grid', icon: <ViewTimelineIcon />, path: '/timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD'] },
