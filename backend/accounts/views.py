@@ -4,14 +4,15 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 import jwt
 from datetime import datetime, timedelta
-from decouple import config
+from django.conf import settings
+from django.db.models import Q
 
 from accounts.models import User
 from accounts.serializers import UserSerializer
 
-JWT_SECRET = config('JWT_SECRET', default='your-secret-key')
-JWT_ALGORITHM = 'HS256'
-JWT_EXP_DELTA_SECONDS = 3600  # 1 hour
+JWT_SECRET = settings.JWT_SECRET
+JWT_ALGORITHM = settings.JWT_ALGORITHM
+JWT_EXP_DELTA_SECONDS = settings.JWT_EXP_DELTA_SECONDS
 
 
 def generate_jwt_token(user):
@@ -45,18 +46,24 @@ class AuthViewSet(viewsets.ViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def login(self, request):
-        """Login with email and password"""
-        email = request.data.get('email')
+        """Login with email/username and password"""
+        identifier = (
+            request.data.get('email')
+            or request.data.get('username')
+            or request.data.get('identifier')
+        )
         password = request.data.get('password')
         
-        if not email or not password:
+        if not identifier or not password:
             return Response(
-                {'error': 'Email and password are required'},
+                {'error': 'Email/username and password are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(
+                Q(email__iexact=identifier.strip()) | Q(username__iexact=identifier.strip())
+            )
         except User.DoesNotExist:
             return Response(
                 {'error': 'Invalid email or password'},

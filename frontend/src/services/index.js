@@ -2,8 +2,8 @@ import api from './api';
 
 // Authentication
 export const authService = {
-  login: (email, password) =>
-    api.post('/auth/login/', { email, password }),
+  login: (identifier, password) =>
+    api.post('/auth/login/', { identifier, password }),
   logout: () => api.post('/auth/logout/'),
   changePassword: (oldPassword, newPassword) =>
     api.post('/auth/change-password/', { old_password: oldPassword, new_password: newPassword }),

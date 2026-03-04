@@ -1,9 +1,19 @@
 import { create } from 'zustand';
 
+const defaultUser = {
+  username: 'localadmin',
+  email: 'localadmin@campus.local',
+  first_name: 'Local',
+  last_name: 'Admin',
+  role: 'SUPER_ADMIN',
+  college: 1,
+  is_active: true,
+};
+
 export const useAuthStore = create((set) => ({
-  user: null,
+  user: defaultUser,
   token: null,
-  isAuthenticated: false,
+  isAuthenticated: true,
 
   setAuth: (user, token) => {
     localStorage.setItem('token', token);
@@ -12,9 +22,7 @@ export const useAuthStore = create((set) => ({
   },
 
   logout: () => {
-    localStorage.removeItem('token');
-   localStorage.removeItem('user');
-    set({ user: null, token: null, isAuthenticated: false });
+    set({ user: defaultUser, token: null, isAuthenticated: true });
   },
 
   initializeAuth: () => {
@@ -22,7 +30,10 @@ export const useAuthStore = create((set) => ({
     const user = localStorage.getItem('user');
     if (token && user) {
       set({ token, user: JSON.parse(user), isAuthenticated: true });
+      return;
     }
+
+    set({ token: null, user: defaultUser, isAuthenticated: true });
   },
 
   canAccess: (requiredRole) => (state) => {

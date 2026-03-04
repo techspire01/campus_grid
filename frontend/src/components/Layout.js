@@ -30,6 +30,11 @@ import ApprovalIcon from '@mui/icons-material/CheckCircle';
 import WorkIcon from '@mui/icons-material/Work';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
+import BookIcon from '@mui/icons-material/Book';
+import ScienceIcon from '@mui/icons-material/Science';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import GroupWorkIcon from '@mui/icons-material/GroupWork';
+import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 
 const DRAWER_WIDTH = 240;
 
@@ -57,11 +62,16 @@ function Layout({ children }) {
   };
 
   const menuItems = [
-    { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD', 'STAFF'] },
+    { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD', 'LAB_INCHARGE', 'COMMON_SUBJECT_HEAD', 'STAFF', 'STUDENT'] },
+    { label: 'Subjects', icon: <BookIcon />, path: '/subjects', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
+    { label: 'Labs', icon: <ScienceIcon />, path: '/labs', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
+    { label: 'Common Timetable', icon: <ScheduleIcon />, path: '/common-timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
+    { label: 'Department Timetable', icon: <GroupWorkIcon />, path: '/department-timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD'] },
+    { label: 'Timetable Grid', icon: <ViewTimelineIcon />, path: '/timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD'] },
+    { label: 'Final Timetable', icon: <CalendarTodayIcon />, path: '/final-timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD', 'STAFF', 'STUDENT'] },
+    { label: 'Approvals', icon: <ApprovalIcon />, path: '/approvals', roles: ['LAB_INCHARGE', 'COMMON_SUBJECT_HEAD', 'COLLEGE_ADMIN'] },
+    { label: 'Workload', icon: <WorkIcon />, path: '/workload', roles: ['HOD'] },
     { label: 'Admin Panel', icon: <AdminPanelSettingsIcon />, path: '/admin', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
-    { label: 'Timetable', icon: <CalendarTodayIcon />, path: '/timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD'] },
-    { label: 'Approvals', icon: <ApprovalIcon />, path: '/approvals', roles: ['LAB_INCHARGE', 'COMMON_SUBJECT_HEAD'] },
-    { label: 'Workload', icon: <WorkIcon />, path: '/workload', roles: ['HOD', 'STAFF'] },
   ];
 
   const filteredMenuItems = menuItems.filter((item) =>

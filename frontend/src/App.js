@@ -4,12 +4,16 @@ import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { useAuthStore } from './store';
 
 // Pages
-import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminPanelPage from './pages/AdminPanelPage';
 import TimetableGridPage from './pages/TimetableGridPage';
 import ApprovalPage from './pages/ApprovalPage';
 import WorkloadPage from './pages/WorkloadPage';
+import SubjectsPage from './pages/SubjectsPage';
+import LabsPage from './pages/LabsPage';
+import CommonTimetablePage from './pages/CommonTimetablePage';
+import DepartmentTimetablePage from './pages/DepartmentTimetablePage';
+import FinalTimetablePage from './pages/FinalTimetablePage';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -51,7 +55,7 @@ function App() {
       <CssBaseline />
       <Router>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
 
           {/* Protected Routes */}
           <Route
@@ -62,7 +66,12 @@ function App() {
                   <Routes>
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/admin" element={<AdminPanelPage />} />
+                    <Route path="/subjects" element={<SubjectsPage />} />
+                    <Route path="/labs" element={<LabsPage />} />
+                    <Route path="/common-timetable" element={<CommonTimetablePage />} />
+                    <Route path="/department-timetable" element={<DepartmentTimetablePage />} />
                     <Route path="/timetable" element={<TimetableGridPage />} />
+                    <Route path="/final-timetable" element={<FinalTimetablePage />} />
                     <Route path="/approvals" element={<ApprovalPage />} />
                     <Route path="/workload" element={<WorkloadPage />} />
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />

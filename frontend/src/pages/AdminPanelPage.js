@@ -8,7 +8,7 @@ function AdminPanelPage() {
         Admin Panel
       </Typography>
       <Typography color="textSecondary">
-        Configure colleges, departments, labs, and user workloads here.
+        Configure departments, labs, subjects, and user workloads here.
       </Typography>
     </Box>
   );

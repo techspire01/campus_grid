@@ -16,7 +16,7 @@ import { authService } from '../services';
 import { useNavigate } from 'react-router-dom';
 
 function LoginPage() {
-  const [email, setEmail] = useState('admin@campus.com');
+  const [identifier, setIdentifier] = useState('admin@campus.com');
   const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await authService.login(email, password);
+      const response = await authService.login(identifier, password);
       const { token, user } = response.data;
       setAuth(user, token);
       navigate('/dashboard');
@@ -69,10 +69,10 @@ function LoginPage() {
           <form onSubmit={handleLogin}>
             <TextField
               fullWidth
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              label="Email or Username"
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               margin="normal"
               required
               disabled={loading}

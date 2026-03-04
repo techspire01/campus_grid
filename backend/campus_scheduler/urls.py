@@ -1,3 +1,4 @@
+
 """
 URL configuration for campus_scheduler project.
 
@@ -21,6 +22,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('core.urls')),
     path('api/', include('accounts.urls')),
+    path('api/', include('timetable.urls')),
+    path('api/', include('approvals.urls')),
+    path('api/', include('workload.urls')),
 ]
 
 
