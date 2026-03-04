@@ -59,6 +59,10 @@ function ClassDetailPage() {
   const [dialogSubjectName, setDialogSubjectName] = useState('');
   const [dialogSubjectCode, setDialogSubjectCode] = useState('');
   const [dialogSubjectId, setDialogSubjectId] = useState(null);
+  const [staffMembers, setStaffMembers] = useState([]);
+  const [tutorDialogOpen, setTutorDialogOpen] = useState(false);
+  const [selectedTutor, setSelectedTutor] = useState(null);
+  const [savingTutor, setSavingTutor] = useState(false);
 
   useEffect(() => {
     if (classId) {
@@ -66,6 +70,12 @@ function ClassDetailPage() {
       fetchSubjects();
     }
   }, [classId, collegeId]);
+
+  useEffect(() => {
+    if (classData) {
+      fetchStaffMembers();
+    }
+  }, [classData]);
 
   const fetchClassData = async () => {
     setLoading(true);
@@ -109,6 +119,17 @@ function ClassDetailPage() {
       setSubjects(collectedSubjects);
     } catch (error) {
       setSnackbar({ open: true, message: 'Failed to load subjects', severity: 'error' });
+    }
+  };
+
+  const fetchStaffMembers = async () => {
+    try {
+      if (!classData) return;
+
+      const response = await api.get(`/departments/${classData.department}/staff_members/`);
+      setStaffMembers(response.data);
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Failed to load staff members', severity: 'error' });
     }
   };
 
@@ -249,6 +270,50 @@ function ClassDetailPage() {
       setSnackbar({ open: true, message: errorMessage, severity: 'error' });
     } finally {
       setSavingSpecial(false);
+    }
+  };
+
+  const handleAssignTutor = async () => {
+    if (!selectedTutor) {
+      setSnackbar({ open: true, message: 'Please select a tutor', severity: 'warning' });
+      return;
+    }
+
+    setSavingTutor(true);
+    try {
+      const currentTutorIds = (classData?.tutors_detail || []).map((t) => t.id);
+      const newTutorIds = [...currentTutorIds, selectedTutor.id];
+
+      await api.post(`/classes/${classId}/assign_tutors/`, {
+        tutor_ids: newTutorIds,
+      });
+
+      setSnackbar({ open: true, message: 'Tutor assigned successfully', severity: 'success' });
+      setTutorDialogOpen(false);
+      setSelectedTutor(null);
+      fetchClassData();
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to assign tutor';
+      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+    } finally {
+      setSavingTutor(false);
+    }
+  };
+
+  const handleRemoveTutor = async (tutorId) => {
+    try {
+      const currentTutorIds = (classData?.tutors_detail || []).map((t) => t.id);
+      const newTutorIds = currentTutorIds.filter((id) => id !== tutorId);
+
+      await api.post(`/classes/${classId}/assign_tutors/`, {
+        tutor_ids: newTutorIds,
+      });
+
+      setSnackbar({ open: true, message: 'Tutor removed successfully', severity: 'success' });
+      fetchClassData();
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to remove tutor';
+      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
     }
   };
 
@@ -432,6 +497,91 @@ function ClassDetailPage() {
           </Button>
         </Box>
       </Paper>
+
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            Tutors
+          </Typography>
+          <Button 
+            variant="contained" 
+            onClick={() => setTutorDialogOpen(true)}
+            disabled={loading}
+          >
+            Add Tutor
+          </Button>
+        </Box>
+
+        {(classData?.tutors_detail || []).length === 0 ? (
+          <Typography variant="body2" color="textSecondary">
+            No tutors assigned
+          </Typography>
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Tutor Name</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Department</TableCell>
+                  <TableCell align="right">Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(classData?.tutors_detail || []).map((tutor) => (
+                  <TableRow key={tutor.id}>
+                    <TableCell>{tutor.name}</TableCell>
+                    <TableCell>{tutor.email}</TableCell>
+                    <TableCell>{tutor.department || '-'}</TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        edge="end"
+                        aria-label="delete"
+                        onClick={() => handleRemoveTutor(tutor.id)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+
+      <Dialog open={tutorDialogOpen} onClose={() => setTutorDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Tutor</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Autocomplete
+            fullWidth
+            options={staffMembers.filter(
+              (staff) => !(classData?.tutors_detail || []).some((t) => t.id === staff.id)
+            )}
+            getOptionLabel={(option) => `${option.user_name || ''} - ${option.department_name || 'No Department'}`}
+            value={selectedTutor}
+            onChange={(event, value) => setSelectedTutor(value)}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Select Tutor"
+                placeholder="Search and select a tutor"
+              />
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTutorDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleAssignTutor} 
+            variant="contained"
+            disabled={savingTutor || !selectedTutor}
+          >
+            {savingTutor ? <CircularProgress size={20} color="inherit" /> : 'Add'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}

@@ -47,10 +47,16 @@ class ClassSerializer(serializers.ModelSerializer):
     year_display = serializers.CharField(source='get_year_display', read_only=True)
     section_display = serializers.CharField(source='get_section_display', read_only=True)
     assigned_subjects = serializers.SerializerMethodField()
+    tutors = serializers.PrimaryKeyRelatedField(
+        queryset=Staff.objects.all(),
+        many=True,
+        required=False
+    )
+    tutors_detail = serializers.SerializerMethodField()
     
     class Meta:
         model = Class
-        fields = ['id', 'department', 'department_name', 'department_code', 'year', 'year_display', 'section', 'section_display', 'assigned_subjects', 'created_at', 'updated_at']
+        fields = ['id', 'department', 'department_name', 'department_code', 'year', 'year_display', 'section', 'section_display', 'assigned_subjects', 'tutors', 'tutors_detail', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_assigned_subjects(self, obj):
@@ -63,6 +69,18 @@ class ClassSerializer(serializers.ModelSerializer):
                 'hours_per_week': mapping.subject.hours_per_week,
             }
             for mapping in obj.subject_mappings.select_related('subject').all().order_by('subject__name')
+        ]
+    
+    def get_tutors_detail(self, obj):
+        return [
+            {
+                'id': tutor.id,
+                'user_id': tutor.user.id,
+                'name': tutor.user.get_full_name(),
+                'email': tutor.user.email,
+                'department': tutor.department.name if tutor.department else None,
+            }
+            for tutor in obj.tutors.all()
         ]
 
 

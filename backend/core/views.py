@@ -374,6 +374,46 @@ class ClassViewSet(viewsets.ModelViewSet):
             'class': serializer.data,
         }, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['get'])
+    def tutors(self, request, pk=None):
+        """Get all tutors assigned to a class"""
+        class_instance = self.get_object()
+        tutors = class_instance.tutors.all()
+        tutors_data = [
+            {
+                'id': tutor.id,
+                'user_id': tutor.user.id,
+                'name': tutor.user.get_full_name(),
+                'email': tutor.user.email,
+                'department': tutor.department.name if tutor.department else None,
+            }
+            for tutor in tutors
+        ]
+        return Response(tutors_data)
+
+    @action(detail=True, methods=['post'])
+    def assign_tutors(self, request, pk=None):
+        """Assign tutors to a class"""
+        class_instance = self.get_object()
+        tutor_ids = request.data.get('tutor_ids', [])
+
+        if not isinstance(tutor_ids, list):
+            return Response({'error': 'tutor_ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tutors = Staff.objects.filter(id__in=tutor_ids)
+            if len(tutors) != len(tutor_ids):
+                return Response({'error': 'One or more tutors not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            class_instance.tutors.set(tutors)
+            serializer = self.get_serializer(class_instance)
+            return Response({
+                'message': 'Tutors assigned successfully',
+                'class': serializer.data,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class LabViewSet(viewsets.ModelViewSet):
     """
