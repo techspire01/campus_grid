@@ -6,6 +6,7 @@ import { useAuthStore } from './store';
 // Pages
 import DashboardPage from './pages/DashboardPage';
 import AdminPanelPage from './pages/AdminPanelPage';
+import DepartmentEditPage from './pages/DepartmentEditPage';
 import TimetableGridPage from './pages/TimetableGridPage';
 import ApprovalPage from './pages/ApprovalPage';
 import WorkloadPage from './pages/WorkloadPage';
@@ -67,6 +68,8 @@ function App() {
                   <Routes>
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/admin" element={<AdminPanelPage />} />
+                    <Route path="/admin/department/create" element={<DepartmentEditPage />} />
+                    <Route path="/admin/department/:departmentName" element={<DepartmentEditPage />} />
                     <Route path="/subjects" element={<SubjectsPage />} />
                     <Route path="/labs" element={<LabsPage />} />
                     <Route path="/classes" element={<ClassesPage />} />
