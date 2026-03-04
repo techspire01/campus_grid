@@ -37,7 +37,6 @@ class Department(models.Model):
 
 class Lab(models.Model):
     college = models.ForeignKey(College, on_delete=models.CASCADE, related_name='labs')
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='labs', null=True, blank=True)
     
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50)

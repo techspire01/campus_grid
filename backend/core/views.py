@@ -81,6 +81,26 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+
+        if not data.get('college'):
+            default_college = getattr(request.user, 'college', None) or College.objects.order_by('id').first()
+
+            if not default_college:
+                default_college = College.objects.create(
+                    name='Default College',
+                    address='Default Address',
+                )
+
+            data['college'] = default_college.id
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     @action(detail=True, methods=['get'])
     def staff_members(self, request, pk=None):
@@ -112,7 +132,7 @@ class LabViewSet(viewsets.ModelViewSet):
     serializer_class = LabSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['college', 'department', 'is_available']
+    filterset_fields = ['college', 'is_available']
     search_fields = ['name', 'code']
     
     def get_queryset(self):
@@ -129,6 +149,26 @@ class LabViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+
+        if not data.get('college'):
+            default_college = getattr(request.user, 'college', None) or College.objects.order_by('id').first()
+
+            if not default_college:
+                default_college = College.objects.create(
+                    name='Default College',
+                    address='Default Address',
+                )
+
+            data['college'] = default_college.id
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class UserViewSet(viewsets.ModelViewSet):

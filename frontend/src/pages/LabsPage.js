@@ -12,19 +12,15 @@ import { useAuthStore } from '../store';
 function LabsPage() {
   const user = useAuthStore((state) => state.user);
   const [labs, setLabs] = useState([]);
-  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingLab, setEditingLab] = useState(null);
   const [filters, setFilters] = useState({
-    department: '',
     is_available: ''
   });
   const [formData, setFormData] = useState({
     name: '',
-    lab_code: '',
     college: user?.college?.id || '',
-    department: '',
     capacity: 30,
     is_available: true,
     equipment_details: ''
@@ -41,18 +37,13 @@ function LabsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filters.department) params.append('department', filters.department);
       if (filters.is_available !== '') params.append('is_available', filters.is_available);
       if (user?.college?.id) params.append('college', user.college.id);
       params.append('page', page);
 
-      const [labsRes, deptsRes] = await Promise.all([
-        api.get(`/labs/?${params.toString()}`),
-        api.get('/departments/')
-      ]);
+      const labsRes = await api.get(`/labs/?${params.toString()}`);
 
       setLabs(labsRes.data.results || labsRes.data);
-      setDepartments(deptsRes.data.results || deptsRes.data);
       setTotalPages(Math.ceil((labsRes.data.count || labsRes.data.length) / 10) || 1);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -67,9 +58,7 @@ function LabsPage() {
       setEditingLab(lab);
       setFormData({
         name: lab.name,
-        lab_code: lab.lab_code,
         college: lab.college,
-        department: lab.department || '',
         capacity: lab.capacity,
         is_available: lab.is_available,
         equipment_details: lab.equipment_details || ''
@@ -78,9 +67,7 @@ function LabsPage() {
       setEditingLab(null);
       setFormData({
         name: '',
-        lab_code: '',
         college: user?.college?.id || '',
-        department: '',
         capacity: 30,
         is_available: true,
         equipment_details: ''
@@ -95,11 +82,22 @@ function LabsPage() {
   };
 
   const handleSubmit = async () => {
+    // Validate required fields
+    if (!formData.name) {
+      showSnackbar('Please fill in all required fields (Name)', 'error');
+      return;
+    }
+
     try {
       const data = {
-        ...formData,
-        department: formData.department || null
+        name: formData.name,
+        capacity: formData.capacity,
+        is_available: formData.is_available
       };
+
+      if (formData.college) {
+        data.college = formData.college;
+      }
 
       if (editingLab) {
         await api.put(`/labs/${editingLab.id}/`, data);
@@ -112,7 +110,8 @@ function LabsPage() {
       fetchData();
     } catch (error) {
       console.error('Error saving lab:', error);
-      showSnackbar(error.response?.data?.detail || 'Error saving lab', 'error');
+      const errorMsg = error.response?.data?.code?.[0] || error.response?.data?.detail || 'Error saving lab';
+      showSnackbar(errorMsg, 'error');
     }
   };
 
@@ -164,22 +163,7 @@ function LabsPage() {
             <FilterList sx={{ mr: 1, verticalAlign: 'middle' }} />
             <Typography variant="subtitle1" component="span">Filters:</Typography>
           </Grid>
-          <Grid item xs={6} md={4}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Department</InputLabel>
-              <Select
-                value={filters.department}
-                label="Department"
-                onChange={(e) => handleFilterChange('department', e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {departments.map(dept => (
-                  <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={6} md={4}>
+          <Grid item xs={12} md={8}>
             <FormControl fullWidth size="small">
               <InputLabel>Availability</InputLabel>
               <Select
@@ -212,9 +196,7 @@ function LabsPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Lab Code</TableCell>
               <TableCell>Lab Name</TableCell>
-              <TableCell>Department</TableCell>
               <TableCell>Capacity</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Equipment</TableCell>
@@ -224,18 +206,16 @@ function LabsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">Loading...</TableCell>
+                <TableCell colSpan={5} align="center">Loading...</TableCell>
               </TableRow>
             ) : labs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">No labs found</TableCell>
+                <TableCell colSpan={5} align="center">No labs found</TableCell>
               </TableRow>
             ) : (
               labs.map(lab => (
                 <TableRow key={lab.id}>
-                  <TableCell>{lab.lab_code}</TableCell>
                   <TableCell>{lab.name}</TableCell>
-                  <TableCell>{lab.department_name || 'General'}</TableCell>
                   <TableCell>{lab.capacity} students</TableCell>
                   <TableCell>
                     <Chip
@@ -288,36 +268,14 @@ function LabsPage() {
         <DialogTitle>{editingLab ? 'Edit Lab' : 'Add Lab'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 label="Lab Name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Lab Code"
-                value={formData.lab_code}
-                onChange={(e) => setFormData({ ...formData, lab_code: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Department</InputLabel>
-                <Select
-                  value={formData.department}
-                  label="Department"
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                >
-                  <MenuItem value="">General Lab</MenuItem>
-                  {departments.map(dept => (
-                    <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
