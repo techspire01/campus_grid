@@ -9,6 +9,19 @@ from core.models import College, Department, Lab, Class
 from accounts.models import User, Staff
 from core.serializers import CollegeSerializer, DepartmentSerializer, ClassSerializer, LabSerializer, UserSerializer, StaffSerializer, StaffDetailSerializer
 from core.permissions import IsSuperAdmin, IsSuperAdminOrCollegeAdmin
+from timetable.models import Subject, ClassSubjectMapping
+import re
+
+
+CLASS_SPECIAL_SUBJECTS = {
+    'LABHRS': {'name': 'Lab Hours', 'is_lab': True, 'hours_per_week': 2},
+    'PT': {'name': 'PT', 'is_lab': False, 'hours_per_week': 1},
+    'ADDON': {'name': 'Addon Course', 'is_lab': False, 'hours_per_week': 2},
+    'PLACEMENT': {'name': 'Placement Training', 'is_lab': False, 'hours_per_week': 2},
+    'EDC': {'name': 'EDC', 'is_lab': False, 'hours_per_week': 1},
+    'FC': {'name': 'FC', 'is_lab': False, 'hours_per_week': 1},
+    'LIB': {'name': 'Library', 'is_lab': False, 'hours_per_week': 1},
+}
 
 
 class CollegeViewSet(viewsets.ModelViewSet):
@@ -137,17 +150,229 @@ class ClassViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_super_admin():
-            return Class.objects.all()
+            return Class.objects.select_related('department').prefetch_related('subject_mappings__subject')
         elif user.college:
-            return Class.objects.filter(department__college=user.college)
+            return Class.objects.filter(department__college=user.college).select_related('department').prefetch_related('subject_mappings__subject')
         return Class.objects.none()
     
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'assign_subject', 'add_subject', 'remove_subject', 'set_special_subjects']:
             permission_classes = [IsSuperAdminOrCollegeAdmin]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    def _validate_subject_for_class(self, class_instance, subject):
+        if subject.college_id != class_instance.department.college_id:
+            return 'Subject does not belong to the same college as this class'
+
+        if not subject.is_common and subject.department_id != class_instance.department_id:
+            return 'Only same-department core subjects can be assigned to this class'
+
+        if subject.year and subject.year != class_instance.year:
+            return 'Subject year does not match class year'
+
+        return None
+
+    def _generate_subject_code(self, college, subject_name):
+        base = re.sub(r'[^A-Z0-9]+', '', (subject_name or '').upper())[:12] or 'SUB'
+        candidate = base
+        index = 1
+
+        while Subject.objects.filter(college=college, code=candidate).exists():
+            index += 1
+            candidate = f"{base}{index}"
+
+        return candidate
+
+    @action(detail=True, methods=['get'])
+    def subjects(self, request, pk=None):
+        class_instance = self.get_object()
+        assigned_subjects = class_instance.subject_mappings.select_related('subject').all().order_by('subject__name')
+
+        return Response([
+            {
+                'id': mapping.subject.id,
+                'name': mapping.subject.name,
+                'code': mapping.subject.code,
+                'is_lab': mapping.subject.is_lab,
+                'hours_per_week': mapping.subject.hours_per_week,
+                'year': mapping.subject.year,
+                'semester': mapping.subject.semester,
+            }
+            for mapping in assigned_subjects
+        ])
+
+    @action(detail=True, methods=['post'])
+    def assign_subject(self, request, pk=None):
+        class_instance = self.get_object()
+        subject_id = request.data.get('subject_id')
+
+        if not subject_id:
+            return Response({'error': 'subject_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            subject = Subject.objects.get(id=subject_id)
+        except Subject.DoesNotExist:
+            return Response({'error': 'Subject not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        validation_error = self._validate_subject_for_class(class_instance, subject)
+        if validation_error:
+            return Response({'error': validation_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        mapping, created = ClassSubjectMapping.objects.get_or_create(
+            class_instance=class_instance,
+            subject=subject,
+        )
+
+        if not created:
+            return Response({'message': 'Subject already assigned to this class'}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Subject assigned successfully'}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def add_subject(self, request, pk=None):
+        class_instance = self.get_object()
+
+        subject_id = request.data.get('subject_id')
+        subject_name = str(request.data.get('name', '')).strip()
+        subject_code = str(request.data.get('code', '')).strip().upper()
+        is_lab = bool(request.data.get('is_lab', False))
+        hours_per_week = request.data.get('hours_per_week', 3)
+
+        if subject_id:
+            try:
+                subject = Subject.objects.get(id=subject_id)
+            except Subject.DoesNotExist:
+                return Response({'error': 'Subject not found'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            if not subject_name:
+                return Response({'error': 'name is required when subject_id is not provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+            college = class_instance.department.college
+
+            subject = Subject.objects.filter(
+                college=college,
+                name__iexact=subject_name,
+            ).filter(
+                Q(is_common=True) | Q(department=class_instance.department)
+            ).first()
+
+            if not subject and subject_code:
+                subject = Subject.objects.filter(
+                    college=college,
+                    code__iexact=subject_code,
+                ).first()
+
+            if not subject:
+                safe_hours = 3
+                try:
+                    safe_hours = int(hours_per_week)
+                except (TypeError, ValueError):
+                    safe_hours = 3
+
+                subject = Subject.objects.create(
+                    college=college,
+                    department=class_instance.department,
+                    name=subject_name,
+                    code=subject_code or self._generate_subject_code(college, subject_name),
+                    is_common=False,
+                    is_lab=is_lab,
+                    hours_per_week=max(1, safe_hours),
+                    year=class_instance.year,
+                    semester=None,
+                )
+
+        validation_error = self._validate_subject_for_class(class_instance, subject)
+        if validation_error:
+            return Response({'error': validation_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        _, created = ClassSubjectMapping.objects.get_or_create(
+            class_instance=class_instance,
+            subject=subject,
+        )
+
+        return Response(
+            {
+                'message': 'Subject added to class successfully' if created else 'Subject already assigned to this class',
+                'subject': {
+                    'id': subject.id,
+                    'name': subject.name,
+                    'code': subject.code,
+                }
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['delete'], url_path=r'subjects/(?P<subject_id>[^/.]+)')
+    def remove_subject(self, request, pk=None, subject_id=None):
+        class_instance = self.get_object()
+
+        deleted_count, _ = ClassSubjectMapping.objects.filter(
+            class_instance=class_instance,
+            subject_id=subject_id,
+        ).delete()
+
+        if not deleted_count:
+            return Response({'error': 'Subject assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({'message': 'Subject removed from class successfully'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def set_special_subjects(self, request, pk=None):
+        class_instance = self.get_object()
+        selected_codes = request.data.get('selected_codes', [])
+
+        if not isinstance(selected_codes, list):
+            return Response({'error': 'selected_codes must be an array'}, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized_codes = []
+        for code in selected_codes:
+            code_value = str(code).strip().upper()
+            if code_value not in CLASS_SPECIAL_SUBJECTS:
+                return Response({'error': f'Invalid special subject code: {code_value}'}, status=status.HTTP_400_BAD_REQUEST)
+            normalized_codes.append(code_value)
+
+        normalized_codes = list(dict.fromkeys(normalized_codes))
+
+        college = class_instance.department.college
+
+        special_subjects_by_code = {}
+        for code, subject_data in CLASS_SPECIAL_SUBJECTS.items():
+            subject, _ = Subject.objects.get_or_create(
+                college=college,
+                code=code,
+                defaults={
+                    'name': subject_data['name'],
+                    'department': None,
+                    'is_common': True,
+                    'is_lab': subject_data['is_lab'],
+                    'hours_per_week': subject_data['hours_per_week'],
+                    'year': None,
+                    'semester': None,
+                }
+            )
+            special_subjects_by_code[code] = subject
+
+        selected_subject_ids = [special_subjects_by_code[code].id for code in normalized_codes]
+        all_special_subject_ids = [subject.id for subject in special_subjects_by_code.values()]
+
+        ClassSubjectMapping.objects.filter(
+            class_instance=class_instance,
+            subject_id__in=all_special_subject_ids,
+        ).exclude(subject_id__in=selected_subject_ids).delete()
+
+        for subject_id in selected_subject_ids:
+            ClassSubjectMapping.objects.get_or_create(
+                class_instance=class_instance,
+                subject_id=subject_id,
+            )
+
+        serializer = self.get_serializer(class_instance)
+        return Response({
+            'message': 'Special subjects updated successfully',
+            'class': serializer.data,
+        }, status=status.HTTP_200_OK)
 
 
 class LabViewSet(viewsets.ModelViewSet):
@@ -160,7 +385,7 @@ class LabViewSet(viewsets.ModelViewSet):
     serializer_class = LabSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['college', 'is_available']
+    filterset_fields = ['college']
     search_fields = ['name', 'code']
     
     def get_queryset(self):

@@ -1,6 +1,6 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
-from core.models import College, Department, Lab
+from core.models import College, Department, Lab, Class
 from accounts.models import User, Staff
 
 
@@ -27,6 +27,23 @@ class Subject(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.code})"
+
+
+class ClassSubjectMapping(models.Model):
+    class_instance = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='subject_mappings')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='class_mappings')
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'timetable_class_subject_mapping'
+        unique_together = ('class_instance', 'subject')
+        indexes = [
+            models.Index(fields=['class_instance']),
+            models.Index(fields=['subject']),
+        ]
+
+    def __str__(self):
+        return f"{self.class_instance} -> {self.subject.code}"
 
 
 class TimeSlot(models.Model):
