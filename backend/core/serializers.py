@@ -97,10 +97,23 @@ class ClassSerializer(serializers.ModelSerializer):
 class LabSerializer(serializers.ModelSerializer):
     college = serializers.PrimaryKeyRelatedField(queryset=College.objects.all(), required=False)
     college_name = serializers.CharField(source='college.name', read_only=True)
+    reference_docx_url = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Lab
-        fields = ['id', 'college', 'college_name', 'name', 'code', 'capacity', 'is_available', 'created_at', 'updated_at']
+        fields = [
+            'id',
+            'college',
+            'college_name',
+            'name',
+            'code',
+            'capacity',
+            'is_available',
+            'reference_docx',
+            'reference_docx_url',
+            'created_at',
+            'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         validators = []
         extra_kwargs = {
@@ -146,6 +159,14 @@ class LabSerializer(serializers.ModelSerializer):
             attrs['code'] = self._generate_lab_code(attrs['college'], attrs.get('name'))
 
         return attrs
+
+    def get_reference_docx_url(self, obj):
+        if not obj.reference_docx:
+            return None
+
+        request = self.context.get('request')
+        url = obj.reference_docx.url
+        return request.build_absolute_uri(url) if request else url
 
 
 class UserSerializer(serializers.ModelSerializer):

@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import FileExtensionValidator
 
 class College(models.Model):
     name = models.CharField(max_length=255, unique=True)
@@ -43,6 +44,12 @@ class Lab(models.Model):
     capacity = models.IntegerField(default=30)
     
     is_available = models.BooleanField(default=True)
+    reference_docx = models.FileField(
+        upload_to='lab_references/',
+        null=True,
+        blank=True,
+        validators=[FileExtensionValidator(allowed_extensions=['docx'])],
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

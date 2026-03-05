@@ -9,7 +9,7 @@ from core.models import College, Department, Lab, Class
 from accounts.models import User, Staff
 from core.serializers import CollegeSerializer, DepartmentSerializer, ClassSerializer, LabSerializer, UserSerializer, StaffSerializer, StaffDetailSerializer
 from core.permissions import IsSuperAdmin, IsSuperAdminOrCollegeAdmin
-from timetable.models import Subject, ClassSubjectMapping
+from timetable.models import Subject, ClassSubjectMapping, TimetableEntry
 import re
 
 
@@ -472,6 +472,38 @@ class LabViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=True, methods=['get'])
+    def practical_timetable(self, request, pk=None):
+        lab = self.get_object()
+        entries = (
+            TimetableEntry.objects
+            .filter(lab=lab, subject__is_lab=True)
+            .select_related('subject', 'staff__user', 'timeslot')
+            .order_by('timeslot__day_order', 'timeslot__period_number', 'class_name')
+        )
+
+        timetable = [
+            {
+                'entry_id': entry.id,
+                'class_name': entry.class_name,
+                'subject_name': entry.subject.name if entry.subject else None,
+                'subject_code': entry.subject.code if entry.subject else None,
+                'staff_name': entry.staff.user.get_full_name() if entry.staff else None,
+                'day_order': entry.timeslot.day_order if entry.timeslot else None,
+                'period_number': entry.timeslot.period_number if entry.timeslot else None,
+                'start_time': entry.timeslot.start_time.strftime('%H:%M') if entry.timeslot and entry.timeslot.start_time else None,
+                'end_time': entry.timeslot.end_time.strftime('%H:%M') if entry.timeslot and entry.timeslot.end_time else None,
+            }
+            for entry in entries
+        ]
+
+        return Response({
+            'lab_id': lab.id,
+            'lab_name': lab.name,
+            'count': len(timetable),
+            'timetable': timetable,
+        })
 
 
 class UserViewSet(viewsets.ModelViewSet):
