@@ -52,7 +52,6 @@ function AdminPanelPage() {
     name: '',
     code: '',
     description: '',
-    is_active: true,
   });
 
   const collegeId = useMemo(() => user?.college?.id || user?.college || null, [user]);
@@ -239,7 +238,6 @@ function AdminPanelPage() {
         name: type.name || '',
         code: type.code || '',
         description: type.description || '',
-        is_active: type.is_active !== false,
       });
     } else {
       setSubjectTypeForm({
@@ -247,7 +245,6 @@ function AdminPanelPage() {
         name: '',
         code: '',
         description: '',
-        is_active: true,
       });
     }
     setOpenSubjectTypeDialog(true);
@@ -264,7 +261,6 @@ function AdminPanelPage() {
         name: subjectTypeForm.name,
         code: subjectTypeForm.code.toUpperCase(),
         description: subjectTypeForm.description,
-        is_active: subjectTypeForm.is_active,
       };
 
       if (subjectTypeForm.id) {
@@ -497,14 +493,13 @@ function AdminPanelPage() {
               <TableCell>Code</TableCell>
               <TableCell>Name</TableCell>
               <TableCell>Description</TableCell>
-              <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {subjectTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">No subject types found</TableCell>
+                <TableCell colSpan={4} align="center">No subject types found</TableCell>
               </TableRow>
             ) : (
               subjectTypes.map((type) => (
@@ -512,7 +507,6 @@ function AdminPanelPage() {
                   <TableCell>{type.code}</TableCell>
                   <TableCell>{type.name}</TableCell>
                   <TableCell>{type.description || '-'}</TableCell>
-                  <TableCell>{type.is_active ? 'Active' : 'Inactive'}</TableCell>
                   <TableCell align="right">
                     <IconButton size="small" onClick={() => handleOpenSubjectTypeDialog(type)}>
                       <Edit />
@@ -562,19 +556,6 @@ function AdminPanelPage() {
                 value={subjectTypeForm.description}
                 onChange={(e) => setSubjectTypeForm((prev) => ({ ...prev, description: e.target.value }))}
               />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControl fullWidth margin="dense">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  label="Status"
-                  value={subjectTypeForm.is_active}
-                  onChange={(e) => setSubjectTypeForm((prev) => ({ ...prev, is_active: e.target.value }))}
-                >
-                  <MenuItem value={true}>Active</MenuItem>
-                  <MenuItem value={false}>Inactive</MenuItem>
-                </Select>
-              </FormControl>
             </Grid>
           </Grid>
         </DialogContent>
