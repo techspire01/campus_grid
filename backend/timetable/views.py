@@ -4,11 +4,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+from datetime import datetime, timedelta
 
-from timetable.models import Subject, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable
+from timetable.models import Subject, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
 from timetable.serializers import (
     SubjectSerializer, TimeSlotSerializer, TimetableEntrySerializer,
-    CommonTimetableSerializer, DepartmentTimetableSerializer
+    CommonTimetableSerializer, DepartmentTimetableSerializer, CollegeTimingSerializer
 )
 from core.permissions import IsSuperAdmin, IsSuperAdminOrCollegeAdmin, IsCollegeAdmin, IsHOD
 
@@ -144,6 +145,155 @@ class SubjectViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class CollegeTimingViewSet(viewsets.ModelViewSet):
+    """
+    Configure college-level operating time and split it into hourly periods.
+
+    Endpoints:
+    - GET /api/college-timings/ - List timing configs
+    - POST /api/college-timings/ - Create or update timing config
+    - POST /api/college-timings/{id}/apply/ - Regenerate timeslots with split hours
+    """
+    queryset = CollegeTiming.objects.all()
+    serializer_class = CollegeTimingSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['college']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_super_admin():
+            return CollegeTiming.objects.all()
+        elif user.college:
+            return CollegeTiming.objects.filter(college=user.college)
+        return CollegeTiming.objects.none()
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'apply']:
+            permission_classes = [IsSuperAdminOrCollegeAdmin]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    def create(self, request, *args, **kwargs):
+        """Upsert timing config so each college has one active record."""
+        college_id = request.data.get('college')
+        if not college_id:
+            return Response({'error': 'college is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        instance = CollegeTiming.objects.filter(college_id=college_id).first()
+        serializer = self.get_serializer(instance, data=request.data, partial=bool(instance))
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        status_code = status.HTTP_200_OK if instance else status.HTTP_201_CREATED
+        return Response(serializer.data, status=status_code)
+
+    @action(detail=True, methods=['post'])
+    def apply(self, request, pk=None):
+        """
+        Generate day-wise timeslots using manual periods when provided,
+        otherwise fall back to 1-hour split from start/end.
+        """
+        timing = self.get_object()
+        college = timing.college
+        working_days = int(request.data.get('working_days', college.working_days or 6))
+
+        split_periods = []
+        manual_periods = request.data.get('periods')
+
+        if manual_periods:
+            if not isinstance(manual_periods, list):
+                return Response({'error': 'periods must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+
+            for index, period in enumerate(manual_periods, start=1):
+                start_value = period.get('start_time') if isinstance(period, dict) else None
+                end_value = period.get('end_time') if isinstance(period, dict) else None
+
+                if not start_value or not end_value:
+                    return Response(
+                        {'error': f'Period {index} requires start_time and end_time'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                try:
+                    start_time = datetime.strptime(start_value, '%H:%M').time()
+                    end_time = datetime.strptime(end_value, '%H:%M').time()
+                except ValueError:
+                    return Response(
+                        {'error': f'Invalid time format in period {index}. Use HH:MM'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if start_time >= end_time:
+                    return Response(
+                        {'error': f'Period {index} end_time must be later than start_time'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if split_periods and start_time < split_periods[-1][1]:
+                    return Response(
+                        {'error': f'Period {index} overlaps with previous period'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                split_periods.append((start_time, end_time))
+        else:
+            start_dt = datetime.combine(datetime.today(), timing.start_time)
+            end_dt = datetime.combine(datetime.today(), timing.end_time)
+            current = start_dt
+            while current + timedelta(hours=1) <= end_dt:
+                next_hour = current + timedelta(hours=1)
+                split_periods.append((current.time(), next_hour.time()))
+                current = next_hour
+
+        if not split_periods:
+            return Response(
+                {'error': 'The selected time window must contain at least one 1-hour period'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        TimeSlot.objects.filter(college=college).delete()
+
+        created_slots = []
+        for day in range(1, working_days + 1):
+            for period_number, (slot_start, slot_end) in enumerate(split_periods, start=1):
+                created_slots.append(
+                    TimeSlot.objects.create(
+                        college=college,
+                        day_order=day,
+                        period_number=period_number,
+                        start_time=slot_start,
+                        end_time=slot_end,
+                        is_common_locked=False,
+                    )
+                )
+
+        college.periods_per_day = len(split_periods)
+        college.save(update_fields=['periods_per_day', 'updated_at'])
+
+        timing.start_time = split_periods[0][0]
+        timing.end_time = split_periods[-1][1]
+        timing.save(update_fields=['start_time', 'end_time', 'updated_at'])
+
+        split_rows = [
+            {
+                'period_number': index,
+                'start_time': slot_start.strftime('%H:%M'),
+                'end_time': slot_end.strftime('%H:%M'),
+            }
+            for index, (slot_start, slot_end) in enumerate(split_periods, start=1)
+        ]
+
+        return Response({
+            'message': f'Generated {len(created_slots)} time slots for {working_days} working days',
+            'college': college.name,
+            'working_days': working_days,
+            'periods_per_day': len(split_periods),
+            'split_table': split_rows,
+            'total_slots': len(created_slots),
+        })
+
+
 class TimeSlotViewSet(viewsets.ModelViewSet):
     """
     CRUD operations for Time Slots.
@@ -190,8 +340,8 @@ class TimeSlotViewSet(viewsets.ModelViewSet):
         This will create all time slots for the college.
         """
         college_id = request.data.get('college_id')
-        working_days = request.data.get('working_days', 6)
-        periods_per_day = request.data.get('periods_per_day', 5)
+        working_days = int(request.data.get('working_days', 6))
+        periods_per_day = int(request.data.get('periods_per_day', 5))
         
         from core.models import College
         
@@ -211,14 +361,35 @@ class TimeSlotViewSet(viewsets.ModelViewSet):
         if existing_count > 0:
             TimeSlot.objects.filter(college=college).delete()
         
+        timing = CollegeTiming.objects.filter(college=college).first()
+        split_periods = []
+        if timing:
+            start_dt = datetime.combine(datetime.today(), timing.start_time)
+            end_dt = datetime.combine(datetime.today(), timing.end_time)
+            current = start_dt
+            while current + timedelta(hours=1) <= end_dt:
+                next_hour = current + timedelta(hours=1)
+                split_periods.append((current.time(), next_hour.time()))
+                current = next_hour
+
+            if split_periods:
+                periods_per_day = len(split_periods)
+
         # Generate new timeslots
         created_slots = []
         for day in range(1, working_days + 1):
             for period in range(1, periods_per_day + 1):
+                slot_start = None
+                slot_end = None
+                if split_periods:
+                    slot_start, slot_end = split_periods[period - 1]
+
                 timeslot = TimeSlot.objects.create(
                     college=college,
                     day_order=day,
                     period_number=period,
+                    start_time=slot_start,
+                    end_time=slot_end,
                     is_common_locked=False
                 )
                 created_slots.append(timeslot)

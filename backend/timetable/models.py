@@ -54,6 +54,8 @@ class TimeSlot(models.Model):
     
     day_order = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(6)])  # Monday = 1, ... Saturday = 6
     period_number = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(10)])
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
     
     is_common_locked = models.BooleanField(default=False)  # Prevents editing common slots
     
@@ -70,6 +72,21 @@ class TimeSlot(models.Model):
     def __str__(self):
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
         return f"Day {self.day_order} ({days[self.day_order-1]}) - Period {self.period_number}"
+
+
+class CollegeTiming(models.Model):
+    college = models.OneToOneField(College, on_delete=models.CASCADE, related_name='timing_config')
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'timetable_college_timing'
+
+    def __str__(self):
+        return f"{self.college.name}: {self.start_time} - {self.end_time}"
 
 
 class TimetableEntry(models.Model):

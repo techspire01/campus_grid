@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from timetable.models import Subject, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable
+from datetime import datetime
+from timetable.models import Subject, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
 
 
 class SubjectSerializer(serializers.ModelSerializer):
@@ -25,15 +26,50 @@ class SubjectSerializer(serializers.ModelSerializer):
 
 class TimeSlotSerializer(serializers.ModelSerializer):
     day_name = serializers.SerializerMethodField()
+    period_label = serializers.SerializerMethodField()
     
     class Meta:
         model = TimeSlot
-        fields = ['id', 'college', 'day_order', 'day_name', 'period_number', 'is_common_locked', 'created_at', 'updated_at']
+        fields = ['id', 'college', 'day_order', 'day_name', 'period_number', 'start_time', 'end_time', 'period_label', 'is_common_locked', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
     
     def get_day_name(self, obj):
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
         return days[obj.day_order - 1] if 1 <= obj.day_order <= 6 else 'Unknown'
+
+    def get_period_label(self, obj):
+        if not obj.start_time or not obj.end_time:
+            return None
+        return f"{obj.start_time.strftime('%H:%M')} - {obj.end_time.strftime('%H:%M')}"
+
+
+class CollegeTimingSerializer(serializers.ModelSerializer):
+    split_hours = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CollegeTiming
+        fields = ['id', 'college', 'start_time', 'end_time', 'split_hours', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        start_time = attrs.get('start_time', getattr(self.instance, 'start_time', None))
+        end_time = attrs.get('end_time', getattr(self.instance, 'end_time', None))
+
+        if start_time and end_time and start_time >= end_time:
+            raise serializers.ValidationError({'end_time': 'End time must be later than start time'})
+        return attrs
+
+    def get_split_hours(self, obj):
+        slots_qs = TimeSlot.objects.filter(college=obj.college, day_order=1).order_by('period_number')
+        slots = []
+        for slot in slots_qs:
+            if slot.start_time and slot.end_time:
+                slots.append({
+                    'period_number': slot.period_number,
+                    'start_time': slot.start_time.strftime('%H:%M'),
+                    'end_time': slot.end_time.strftime('%H:%M'),
+                })
+        return slots
 
 
 class TimetableEntrySerializer(serializers.ModelSerializer):
