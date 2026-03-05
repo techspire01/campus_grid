@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -72,8 +72,11 @@ class SubjectViewSet(viewsets.ModelViewSet):
     
     def perform_update(self, serializer):
         """Validate subject update"""
-        is_common = serializer.validated_data.get('is_common', False)
-        department = serializer.validated_data.get('department')
+        instance = serializer.instance
+        
+        # Get values from validated_data or fall back to instance values for partial updates
+        is_common = serializer.validated_data.get('is_common', instance.is_common)
+        department = serializer.validated_data.get('department', instance.department)
         
         # Common subjects cannot have a department
         if is_common and department:

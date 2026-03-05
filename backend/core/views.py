@@ -330,7 +330,7 @@ class ClassViewSet(viewsets.ModelViewSet):
         for code in selected_codes:
             code_value = str(code).strip().upper()
             if code_value not in CLASS_SPECIAL_SUBJECTS:
-                return Response({'error': f'Invalid special subject code: {code_value}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'Invalid common subject code: {code_value}'}, status=status.HTTP_400_BAD_REQUEST)
             normalized_codes.append(code_value)
 
         normalized_codes = list(dict.fromkeys(normalized_codes))
@@ -370,7 +370,7 @@ class ClassViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(class_instance)
         return Response({
-            'message': 'Special subjects updated successfully',
+            'message': 'Common subjects updated successfully',
             'class': serializer.data,
         }, status=status.HTTP_200_OK)
 

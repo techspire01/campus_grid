@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, IconButton, TextField, Dialog, DialogTitle,
   DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem,
-  Chip, Grid, Alert, Snackbar, FormControlLabel
+  Chip, Grid, Alert, Snackbar, FormControlLabel, Autocomplete
 } from '@mui/material';
 import { Add, Edit, Delete, FilterList } from '@mui/icons-material';
 import api from '../services/api';
@@ -13,6 +13,7 @@ function SubjectsPage() {
   const user = useAuthStore((state) => state.user);
   const [subjects, setSubjects] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [staffMembers, setStaffMembers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
@@ -31,7 +32,8 @@ function SubjectsPage() {
     is_lab: false,
     hours_per_week: 3,
     year: '',
-    semester: ''
+    semester: '',
+    staff: null
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
@@ -47,10 +49,12 @@ function SubjectsPage() {
       if (filters.is_common !== '') params.append('is_common', filters.is_common);
       if (filters.is_lab !== '') params.append('is_lab', filters.is_lab);
       if (user?.college?.id) params.append('college', user.college.id);
-      const [deptsRes] = await Promise.all([
-        api.get('/departments/')
+      const [deptsRes, staffRes] = await Promise.all([
+        api.get('/departments/'),
+        api.get('/staff/')
       ]);
       setDepartments(deptsRes.data.results || deptsRes.data);
+      setStaffMembers(staffRes.data.results || staffRes.data);
 
       let nextUrl = `/subjects/?${params.toString()}`;
       const collectedSubjects = [];
@@ -90,7 +94,8 @@ function SubjectsPage() {
         is_lab: subject.is_lab,
         hours_per_week: subject.hours_per_week,
         year: subject.year || '',
-        semester: subject.semester || ''
+        semester: subject.semester || '',
+        staff: subject.staff || null
       });
     } else {
       setEditingSubject(null);
@@ -104,7 +109,8 @@ function SubjectsPage() {
         is_lab: false,
         hours_per_week: 3,
         year: '',
-        semester: ''
+        semester: '',
+        staff: null
       });
     }
     setOpenDialog(true);
@@ -247,20 +253,21 @@ function SubjectsPage() {
               <TableCell>Name</TableCell>
               <TableCell>Type</TableCell>
               <TableCell>Department</TableCell>
-              <TableCell>Hours/Week</TableCell>
+              <TableCell>Hours</TableCell>
               <TableCell>Lab</TableCell>
               <TableCell>Year</TableCell>
+              <TableCell>Staff</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">Loading...</TableCell>
+                <TableCell colSpan={9} align="center">Loading...</TableCell>
               </TableRow>
             ) : subjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">No subjects found</TableCell>
+                <TableCell colSpan={9} align="center">No subjects found</TableCell>
               </TableRow>
             ) : (
               subjects.map(subject => (
@@ -284,6 +291,17 @@ function SubjectsPage() {
                     />
                   </TableCell>
                   <TableCell>{subject.year || 'All'}</TableCell>
+                  <TableCell>
+                    {subject.staff_details ? (
+                      <Chip
+                        label={subject.staff_details.name}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="body2" color="textSecondary">-</Typography>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <IconButton onClick={() => handleOpenDialog(subject)} size="small">
                       <Edit />
@@ -358,7 +376,7 @@ function SubjectsPage() {
               <TextField
                 fullWidth
                 type="number"
-                label="Hours per Week"
+                label="Hours"
                 value={formData.hours_per_week}
                 onChange={(e) => setFormData({ ...formData, hours_per_week: parseInt(e.target.value) })}
                 inputProps={{ min: 1, max: 10 }}
@@ -393,6 +411,23 @@ function SubjectsPage() {
                   ))}
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <Autocomplete
+                options={staffMembers}
+                getOptionLabel={(option) => option.name || option.user?.username || ''}
+                value={formData.staff ? staffMembers.find(staff => staff.id === formData.staff) : null}
+                onChange={(event, newValue) => {
+                  setFormData({ ...formData, staff: newValue ? newValue.id : null });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Assigned Staff"
+                    placeholder="Select the staff member who handles this subject"
+                  />
+                )}
+              />
             </Grid>
             <Grid item xs={6}>
               <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>

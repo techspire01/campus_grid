@@ -27,11 +27,12 @@ import {
   DialogActions,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAuthStore } from '../store';
 
-const SPECIAL_SUBJECT_OPTIONS = [
+const COMMON_SUBJECT_OPTIONS = [
   { code: 'PT', label: 'PT' },
   { code: 'ADDON', label: 'Addon Course' },
   { code: 'PLACEMENT', label: 'Placement Training' },
@@ -63,6 +64,10 @@ function ClassDetailPage() {
   const [tutorDialogOpen, setTutorDialogOpen] = useState(false);
   const [selectedTutor, setSelectedTutor] = useState(null);
   const [savingTutor, setSavingTutor] = useState(false);
+  const [staffDialogOpen, setStaffDialogOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState(null);
+  const [selectedStaff, setSelectedStaff] = useState(null);
+  const [savingStaff, setSavingStaff] = useState(false);
 
   useEffect(() => {
     if (classId) {
@@ -86,7 +91,7 @@ function ClassDetailPage() {
 
       const selectedCodes = (classEntry.assigned_subjects || [])
         .map((subject) => String(subject.code || '').toUpperCase())
-        .filter((code) => SPECIAL_SUBJECT_OPTIONS.some((option) => option.code === code));
+        .filter((code) => COMMON_SUBJECT_OPTIONS.some((option) => option.code === code));
       setSelectedSpecialCodes(selectedCodes);
     } catch (error) {
       setSnackbar({ open: true, message: 'Failed to load class details', severity: 'error' });
@@ -262,11 +267,11 @@ function ClassDetailPage() {
       await api.post(`/classes/${classId}/set_special_subjects/`, {
         selected_codes: selectedSpecialCodes,
       });
-      setSnackbar({ open: true, message: 'Special subjects saved', severity: 'success' });
+      setSnackbar({ open: true, message: 'Common subjects saved', severity: 'success' });
       fetchClassData();
       fetchSubjects();
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to save special subjects';
+      const errorMessage = error.response?.data?.error || 'Failed to save common subjects';
       setSnackbar({ open: true, message: errorMessage, severity: 'error' });
     } finally {
       setSavingSpecial(false);
@@ -314,6 +319,39 @@ function ClassDetailPage() {
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to remove tutor';
       setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+    }
+  };
+
+  const handleOpenStaffDialog = (subject) => {
+    setEditingSubject(subject);
+    setSelectedStaff(subject.staff || null);
+    setStaffDialogOpen(true);
+  };
+
+  const handleCloseStaffDialog = () => {
+    setStaffDialogOpen(false);
+    setEditingSubject(null);
+    setSelectedStaff([]);
+  };
+
+  const handleAssignStaff = async () => {
+    if (!editingSubject) return;
+
+    setSavingStaff(true);
+    try {
+      await api.patch(`/subjects/${editingSubject.id}/`, {
+        staff: selectedStaff,
+      });
+
+      setSnackbar({ open: true, message: 'Staff assigned successfully', severity: 'success' });
+      handleCloseStaffDialog();
+      fetchClassData();
+      fetchSubjects();
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.response?.data?.detail || 'Failed to assign staff';
+      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+    } finally {
+      setSavingStaff(false);
     }
   };
 
@@ -426,7 +464,7 @@ function ClassDetailPage() {
       <Paper sx={{ p: 2, mb: 3 }}>
         {(() => {
           const regularSubjects = (classData?.assigned_subjects || []).filter(
-            (subject) => !SPECIAL_SUBJECT_OPTIONS.some((option) => option.code === subject.code)
+            (subject) => !COMMON_SUBJECT_OPTIONS.some((option) => option.code === subject.code)
           );
           
           return regularSubjects.length === 0 ? (
@@ -469,14 +507,14 @@ function ClassDetailPage() {
 
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          Special Subjects
+          Common Subjects
         </Typography>
         <Typography color="textSecondary" sx={{ mb: 2 }}>
-          Select and save special items for this class.
+          Select and save common items for this class.
         </Typography>
 
         <Grid container spacing={1}>
-          {SPECIAL_SUBJECT_OPTIONS.map((option) => (
+          {COMMON_SUBJECT_OPTIONS.map((option) => (
             <Grid item xs={12} sm={6} md={4} key={option.code}>
               <FormControlLabel
                 control={(
@@ -493,7 +531,7 @@ function ClassDetailPage() {
 
         <Box sx={{ mt: 2 }}>
           <Button variant="contained" onClick={handleSaveSpecialSubjects} disabled={savingSpecial}>
-            Save Special Subjects
+            Save Common Subjects
           </Button>
         </Box>
       </Paper>
@@ -551,6 +589,74 @@ function ClassDetailPage() {
         )}
       </Paper>
 
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          All Subjects
+        </Typography>
+        <Typography color="textSecondary" sx={{ mb: 2 }}>
+          Complete list of subjects assigned to this class, including common subjects.
+        </Typography>
+
+        {(classData?.assigned_subjects || []).length === 0 ? (
+          <Typography variant="body2" color="textSecondary">
+            No subjects assigned to this class
+          </Typography>
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Subject Code</TableCell>
+                  <TableCell>Subject Name</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Assigned Staff</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(classData?.assigned_subjects || []).map((subject) => {
+                  const isCommon = COMMON_SUBJECT_OPTIONS.some((option) => option.code === subject.code);
+                  return (
+                    <TableRow key={subject.id}>
+                      <TableCell>{subject.code}</TableCell>
+                      <TableCell>{subject.name}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={isCommon ? 'Common' : 'Regular'} 
+                          size="small" 
+                          color={isCommon ? 'primary' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {subject.staff_details ? (
+                          <Chip
+                            label={subject.staff_details.name}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="textSecondary">No staff assigned</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenStaffDialog(subject)}
+                          color="primary"
+                          title="Assign Staff"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+
       <Dialog open={tutorDialogOpen} onClose={() => setTutorDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add Tutor</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -579,6 +685,43 @@ function ClassDetailPage() {
             disabled={savingTutor || !selectedTutor}
           >
             {savingTutor ? <CircularProgress size={20} color="inherit" /> : 'Add'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={staffDialogOpen} onClose={handleCloseStaffDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Assign Staff to {editingSubject?.name}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Select the staff member who handles this subject
+          </Typography>
+          <Autocomplete
+            fullWidth
+            options={staffMembers}
+            getOptionLabel={(option) => `${option.user_name || option.name || ''} - ${option.department_name || 'No Department'}`}
+            value={selectedStaff ? staffMembers.find(s => s.id === selectedStaff) : null}
+            onChange={(event, newValue) => {
+              setSelectedStaff(newValue ? newValue.id : null);
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Select Staff"
+                placeholder="Search and select a staff member"
+              />
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseStaffDialog}>Cancel</Button>
+          <Button 
+            onClick={handleAssignStaff} 
+            variant="contained"
+            disabled={savingStaff}
+          >
+            {savingStaff ? <CircularProgress size={20} color="inherit" /> : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>

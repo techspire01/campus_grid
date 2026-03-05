@@ -18,6 +18,9 @@ class Subject(models.Model):
     year = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(4)], null=True, blank=True)
     semester = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(8)], null=True, blank=True)
     
+    # Staff member handling this subject
+    staff = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='subjects')
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

@@ -273,7 +273,7 @@ function WorkloadPage() {
                     <TableCell>{subject?.name || assignment.subject}</TableCell>
                     <TableCell>{dept?.name || assignment.department}</TableCell>
                     <TableCell>{assignment.class_name}</TableCell>
-                    <TableCell>{assignment.hours_assigned} hrs/week</TableCell>
+                    <TableCell>{assignment.hours_assigned} hrs</TableCell>
                     <TableCell>
                       <Chip
                         label={assignment.is_approved ? 'Approved' : 'Pending'}
@@ -378,7 +378,7 @@ function WorkloadPage() {
               <TextField
                 fullWidth
                 type="number"
-                label="Hours per Week"
+                label="Hours"
                 value={formData.hours_assigned}
                 onChange={(e) => setFormData({ ...formData, hours_assigned: parseInt(e.target.value) })}
                 inputProps={{ min: 1, max: 10 }}

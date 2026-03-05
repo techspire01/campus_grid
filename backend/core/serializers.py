@@ -196,14 +196,17 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class StaffSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source='user.get_full_name', read_only=True)
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
+    user_role = serializers.CharField(source='user.role', read_only=True)
+    user_phone = serializers.CharField(source='user.phone', read_only=True)
     department_name = serializers.CharField(source='department.name', read_only=True, allow_null=True)
     remaining_hours = serializers.SerializerMethodField()
     
     class Meta:
         model = Staff
-        fields = ['id', 'user', 'user_name', 'user_email', 'department', 'department_name', 'max_workload_hours', 'current_workload_hours', 'remaining_hours', 'can_handle_common', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'name', 'user_name', 'user_email', 'user_role', 'user_phone', 'department', 'department_name', 'max_workload_hours', 'current_workload_hours', 'remaining_hours', 'can_handle_common', 'created_at', 'updated_at']
         read_only_fields = ['id', 'current_workload_hours', 'created_at', 'updated_at']
     
     def get_remaining_hours(self, obj):
