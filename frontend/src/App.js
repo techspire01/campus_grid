@@ -4,7 +4,8 @@ import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { useAuthStore } from './store';
 
 // Pages
-import DashboardPage from './pages/DashboardPage';
+import DepartmentDetailPage from './pages/DepartmentDetailPage';
+import DepartmentDetailsPage from './pages/DepartmentDetailsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
 import DepartmentEditPage from './pages/DepartmentEditPage';
 import TimetableGridPage from './pages/TimetableGridPage';
@@ -67,7 +68,8 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout>
                   <Routes>
-                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/dashboard" element={<DepartmentDetailPage />} />
+                    <Route path="/department/:departmentId" element={<DepartmentDetailsPage />} />
                     <Route path="/admin" element={<AdminPanelPage />} />
                     <Route path="/admin/department/create" element={<DepartmentEditPage />} />
                     <Route path="/admin/department/:departmentName" element={<DepartmentEditPage />} />
