@@ -7,6 +7,7 @@ import { useAuthStore } from './store';
 import DepartmentDetailPage from './pages/DepartmentDetailPage';
 import DepartmentDetailsPage from './pages/DepartmentDetailsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
+import StaffPage from './pages/StaffPage';
 import DepartmentEditPage from './pages/DepartmentEditPage';
 import TimetableGridPage from './pages/TimetableGridPage';
 import ApprovalPage from './pages/ApprovalPage';
@@ -71,6 +72,7 @@ function App() {
                     <Route path="/dashboard" element={<DepartmentDetailPage />} />
                     <Route path="/department/:departmentId" element={<DepartmentDetailsPage />} />
                     <Route path="/admin" element={<AdminPanelPage />} />
+                    <Route path="/staff" element={<StaffPage />} />
                     <Route path="/admin/department/create" element={<DepartmentEditPage />} />
                     <Route path="/admin/department/:departmentName" element={<DepartmentEditPage />} />
                     <Route path="/subjects" element={<SubjectsPage />} />

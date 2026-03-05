@@ -1,16 +1,32 @@
 from rest_framework import serializers
 from datetime import datetime
-from timetable.models import Subject, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
+from timetable.models import Subject, SubjectType, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
+
+
+class SubjectTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubjectType
+        fields = ['id', 'name', 'code', 'description', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class SubjectSerializer(serializers.ModelSerializer):
     college_name = serializers.CharField(source='college.name', read_only=True)
     department_name = serializers.CharField(source='department.name', read_only=True, allow_null=True)
     staff_details = serializers.SerializerMethodField(read_only=True)
+    subject_type = serializers.IntegerField(source='subject_type_fk.id', read_only=True, allow_null=True)
+    subject_type_display = serializers.CharField(read_only=True)
     
     class Meta:
         model = Subject
-        fields = ['id', 'college', 'college_name', 'department', 'department_name', 'name', 'code', 'is_common', 'is_lab', 'hours_per_week', 'year', 'semester', 'staff', 'staff_details', 'created_at', 'updated_at']
+        fields = [
+            'id', 'college', 'college_name', 'department', 'department_name', 
+            'name', 'code', 'is_common', 'is_lab', 'subject_type', 'subject_type_display',
+            'hours_per_week', 'hours_monday', 'hours_tuesday', 'hours_wednesday', 
+            'hours_thursday', 'hours_friday', 'hours_saturday',
+            'total_semester_hours', 'year', 'semester', 
+            'staff', 'staff_details', 'created_at', 'updated_at'
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
     def get_staff_details(self, obj):

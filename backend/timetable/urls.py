@@ -1,13 +1,14 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from timetable.views import (
-    SubjectViewSet, TimeSlotViewSet, TimetableEntryViewSet,
+    SubjectViewSet, SubjectTypeViewSet, TimeSlotViewSet, TimetableEntryViewSet,
     CollegeTimingViewSet,
     CommonTimetableViewSet, DepartmentTimetableViewSet,
     TimetableMergeViewSet, TimetableExportViewSet
 )
 
 router = DefaultRouter()
+router.register(r'subject-types', SubjectTypeViewSet, basename='subject-type')
 router.register(r'subjects', SubjectViewSet, basename='subject')
 router.register(r'timeslots', TimeSlotViewSet, basename='timeslot')
 router.register(r'college-timings', CollegeTimingViewSet, basename='college-timing')

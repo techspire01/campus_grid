@@ -49,6 +49,7 @@ function ClassDetailPage() {
 
   const [classData, setClassData] = useState(null);
   const [subjects, setSubjects] = useState([]);
+  const [subjectTypes, setSubjectTypes] = useState([]);
   const [subjectInputValue, setSubjectInputValue] = useState('');
   const [selectedSubjectOption, setSelectedSubjectOption] = useState(null);
   const [selectedSpecialCodes, setSelectedSpecialCodes] = useState([]);
@@ -69,11 +70,17 @@ function ClassDetailPage() {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [savingStaff, setSavingStaff] = useState(false);
   const [dialogIsLab, setDialogIsLab] = useState(false);
+  
+  // Hours fields
+  const [hoursPerWeek, setHoursPerWeek] = useState(0);
+  const [totalSemesterHours, setTotalSemesterHours] = useState(0);
+  const [subjectType, setSubjectType] = useState('');
 
   useEffect(() => {
     if (classId) {
       fetchClassData();
       fetchSubjects();
+      fetchSubjectTypes();
     }
   }, [classId, collegeId]);
 
@@ -125,6 +132,21 @@ function ClassDetailPage() {
       setSubjects(collectedSubjects);
     } catch (error) {
       setSnackbar({ open: true, message: 'Failed to load subjects', severity: 'error' });
+    }
+  };
+
+  const fetchSubjectTypes = async () => {
+    try {
+      const response = await api.get('/subject-types/');
+      const payload = response.data;
+      const types = Array.isArray(payload) ? payload : (payload.results || []);
+      setSubjectTypes(types);
+      // Set first type as default if available
+      if (types.length > 0 && !subjectType) {
+        setSubjectType(types[0].id);
+      }
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Failed to load subject types', severity: 'error' });
     }
   };
 
@@ -187,12 +209,19 @@ function ClassDetailPage() {
         name: typedName || null,
         code: typedCode || null,
         is_lab: dialogIsLab,
+        subject_type: subjectType,
+        hours_per_week: hoursPerWeek,
+        total_semester_hours: totalSemesterHours,
       });
 
       setDialogSubjectName('');
       setDialogSubjectCode('');
       setDialogSubjectId(null);
       setDialogIsLab(false);
+      // Reset hours fields
+      setHoursPerWeek(0);
+      setTotalSemesterHours(0);
+      setSubjectType(subjectTypes.length > 0 ? subjectTypes[0].id : '');
       setDialogOpen(false);
       setSnackbar({ open: true, message: 'Subject added to class', severity: 'success' });
       fetchClassData();
@@ -209,6 +238,11 @@ function ClassDetailPage() {
     setDialogSubjectName(subject.name || '');
     setDialogSubjectCode(subject.code || '');
     setDialogSubjectId(subject.id);
+    setDialogIsLab(subject.is_lab || false);
+    // Populate hours fields from existing subject
+    setHoursPerWeek(subject.hours_per_week || 0);
+    setTotalSemesterHours(subject.total_semester_hours || 0);
+    setSubjectType(subject.subject_type || (subjectTypes.length > 0 ? subjectTypes[0].id : ''));
   };
 
   const handleDialogClose = () => {
@@ -217,6 +251,10 @@ function ClassDetailPage() {
     setDialogSubjectCode('');
     setDialogSubjectId(null);
     setDialogIsLab(false);
+    // Reset hours fields
+    setHoursPerWeek(0);
+    setTotalSemesterHours(0);
+    setSubjectType(subjectTypes.length > 0 ? subjectTypes[0].id : '');
   };
 
   const handleDialogNameChange = (event, value) => {
@@ -228,6 +266,11 @@ function ClassDetailPage() {
       if (matchedSubject) {
         setDialogSubjectCode(matchedSubject.code || '');
         setDialogSubjectId(matchedSubject.id);
+        setDialogIsLab(matchedSubject.is_lab || false);
+        // Populate hours fields from existing subject
+        setHoursPerWeek(matchedSubject.hours_per_week || 0);
+        setTotalSemesterHours(matchedSubject.total_semester_hours || 0);
+        setSubjectType(matchedSubject.subject_type || (subjectTypes.length > 0 ? subjectTypes[0].id : ''));
       }
     }
   };
@@ -241,6 +284,11 @@ function ClassDetailPage() {
       if (matchedSubject) {
         setDialogSubjectName(matchedSubject.name || '');
         setDialogSubjectId(matchedSubject.id);
+        setDialogIsLab(matchedSubject.is_lab || false);
+        // Populate hours fields from existing subject
+        setHoursPerWeek(matchedSubject.hours_per_week || 0);
+        setTotalSemesterHours(matchedSubject.total_semester_hours || 0);
+        setSubjectType(matchedSubject.subject_type || (subjectTypes.length > 0 ? subjectTypes[0].id : ''));
       }
     }
   };
@@ -458,6 +506,25 @@ function ClassDetailPage() {
                 Selected: {dialogSubjectCode} - {dialogSubjectName}
               </Typography>
             )}
+            
+            <TextField
+              select
+              fullWidth
+              label="Subject Type"
+              value={subjectType}
+              onChange={(e) => setSubjectType(e.target.value)}
+              SelectProps={{
+                native: true,
+              }}
+            >
+              <option value="">Select Subject Type</option>
+              {subjectTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </TextField>
+            
             <FormControlLabel
               control={
                 <Checkbox
@@ -466,6 +533,26 @@ function ClassDetailPage() {
                 />
               }
               label="Lab Practical Subject"
+            />
+            
+            <TextField
+              fullWidth
+              type="number"
+              label="Hours Per Week (6-Day Schedule)"
+              value={hoursPerWeek}
+              onChange={(e) => setHoursPerWeek(Math.max(0, parseInt(e.target.value) || 0))}
+              inputProps={{ min: 0 }}
+              helperText="Total number of hours per week for this subject"
+            />
+            
+            <TextField
+              fullWidth
+              type="number"
+              label="Total Hours for Entire Semester"
+              value={totalSemesterHours}
+              onChange={(e) => setTotalSemesterHours(Math.max(0, parseInt(e.target.value) || 0))}
+              inputProps={{ min: 0 }}
+              helperText="Total number of hours for this subject in the semester"
             />
           </Stack>
         </DialogContent>
@@ -498,26 +585,44 @@ function ClassDetailPage() {
                   <TableRow>
                     <TableCell>Subject Code</TableCell>
                     <TableCell>Subject Name</TableCell>
+                    <TableCell>Subject Type</TableCell>
+                    <TableCell>Hours/Week</TableCell>
+                    <TableCell>Total Sem Hours</TableCell>
                     <TableCell align="right">Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {regularSubjects.map((subject) => (
-                    <TableRow key={subject.id}>
-                      <TableCell>{subject.code}</TableCell>
-                      <TableCell>{subject.name}</TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          edge="end"
-                          aria-label="delete"
-                          onClick={() => handleRemoveSubject(subject.id)}
-                          size="small"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {regularSubjects.map((subject) => {
+                    return (
+                      <TableRow key={subject.id}>
+                        <TableCell>{subject.code}</TableCell>
+                        <TableCell>{subject.name}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={subject.subject_type_display || subject.subject_type || 'Theory'} 
+                            size="small" 
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {subject.hours_per_week || 0}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{subject.total_semester_hours || 0}</TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            edge="end"
+                            aria-label="delete"
+                            onClick={() => handleRemoveSubject(subject.id)}
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -629,6 +734,9 @@ function ClassDetailPage() {
                   <TableCell>Subject Code</TableCell>
                   <TableCell>Subject Name</TableCell>
                   <TableCell>Type</TableCell>
+                  <TableCell>Subject Type</TableCell>
+                  <TableCell>Hours/Week</TableCell>
+                  <TableCell>Total Sem Hours</TableCell>
                   <TableCell>Assigned Staff</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
@@ -647,6 +755,19 @@ function ClassDetailPage() {
                           color={isCommon ? 'primary' : 'default'}
                         />
                       </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={subject.subject_type_display || subject.subject_type || 'Theory'} 
+                          size="small" 
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {subject.hours_per_week || 0}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{subject.total_semester_hours || 0}</TableCell>
                       <TableCell>
                         {subject.staff_details ? (
                           <Chip

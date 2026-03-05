@@ -39,25 +39,21 @@ function AdminPanelPage() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const [departments, setDepartments] = useState([]);
-  const [staffUsers, setStaffUsers] = useState([]);
-  const [staffProfiles, setStaffProfiles] = useState([]);
+  const [subjectTypes, setSubjectTypes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [openStaffDialog, setOpenStaffDialog] = useState(false);
-  const [staffEditForm, setStaffEditForm] = useState({
-    id: null,
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    role: 'STAFF',
-    department: '',
-    password: '',
-  });
+  const [openSubjectTypeDialog, setOpenSubjectTypeDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [timingId, setTimingId] = useState(null);
   const [periodRows, setPeriodRows] = useState([{ id: 'row-1', start_time: null, end_time: null }]);
   const [savingTiming, setSavingTiming] = useState(false);
   const [workingDays, setWorkingDays] = useState(6);
+  const [subjectTypeForm, setSubjectTypeForm] = useState({
+    id: null,
+    name: '',
+    code: '',
+    description: '',
+    is_active: true,
+  });
 
   const collegeId = useMemo(() => user?.college?.id || user?.college || null, [user]);
 
@@ -75,15 +71,9 @@ function AdminPanelPage() {
       const departmentData = departmentRes.data.results || departmentRes.data;
       setDepartments(departmentData);
 
-      const usersRes = collegeId
-        ? await api.get(`/users/?college=${collegeId}`)
-        : await api.get('/users/');
-      const usersData = usersRes.data.results || usersRes.data;
-      setStaffUsers(usersData.filter((entry) => ['HOD', 'STAFF'].includes(entry.role)));
-
-      const staffRes = await api.get('/staff/');
-      const staffData = staffRes.data.results || staffRes.data;
-      setStaffProfiles(staffData);
+      const subjectTypeRes = await api.get('/subject-types/');
+      const subjectTypeData = subjectTypeRes.data.results || subjectTypeRes.data;
+      setSubjectTypes(subjectTypeData);
 
       if (collegeId) {
         const collegeRes = await api.get(`/colleges/${collegeId}/`);
@@ -242,60 +232,71 @@ function AdminPanelPage() {
     }
   };
 
-  const handleOpenStaffEdit = (entry) => {
-    setStaffEditForm({
-      id: entry.id,
-      first_name: entry.first_name || '',
-      last_name: entry.last_name || '',
-      email: entry.email || '',
-      phone: entry.phone || '',
-      role: entry.role || 'STAFF',
-      department: entry.department || '',
-      password: '',
-    });
-    setOpenStaffDialog(true);
+  const handleOpenSubjectTypeDialog = (type = null) => {
+    if (type) {
+      setSubjectTypeForm({
+        id: type.id,
+        name: type.name || '',
+        code: type.code || '',
+        description: type.description || '',
+        is_active: type.is_active !== false,
+      });
+    } else {
+      setSubjectTypeForm({
+        id: null,
+        name: '',
+        code: '',
+        description: '',
+        is_active: true,
+      });
+    }
+    setOpenSubjectTypeDialog(true);
   };
 
-  const handleSaveStaffEdit = async () => {
-    if (!staffEditForm.id) {
-      showSnackbar('Invalid staff account', 'error');
+  const handleSaveSubjectType = async () => {
+    if (!subjectTypeForm.name.trim() || !subjectTypeForm.code.trim()) {
+      showSnackbar('Name and Code are required', 'error');
       return;
     }
 
     try {
-      const departmentValue = staffEditForm.department || null;
-      await api.patch(`/users/${staffEditForm.id}/`, {
-        first_name: staffEditForm.first_name,
-        last_name: staffEditForm.last_name,
-        email: staffEditForm.email,
-        phone: staffEditForm.phone,
-        role: staffEditForm.role,
-        department: departmentValue,
-        ...(staffEditForm.password ? { password: staffEditForm.password } : {}),
-      });
+      const payload = {
+        name: subjectTypeForm.name,
+        code: subjectTypeForm.code.toUpperCase(),
+        description: subjectTypeForm.description,
+        is_active: subjectTypeForm.is_active,
+      };
 
-      const existingProfile = staffProfiles.find((profile) => profile.user === staffEditForm.id);
-      if (existingProfile) {
-        await api.patch(`/staff/${existingProfile.id}/`, {
-          department: departmentValue,
-        });
-      } else if (departmentValue) {
-        await api.post('/staff/', {
-          user: staffEditForm.id,
-          department: departmentValue,
-        });
+      if (subjectTypeForm.id) {
+        await api.patch(`/subject-types/${subjectTypeForm.id}/`, payload);
+        showSnackbar('Subject Type updated successfully', 'success');
+      } else {
+        await api.post('/subject-types/', payload);
+        showSnackbar('Subject Type created successfully', 'success');
       }
 
-      setOpenStaffDialog(false);
-      showSnackbar('Staff profile updated successfully', 'success');
+      setOpenSubjectTypeDialog(false);
       fetchData();
     } catch (error) {
-      const message = error.response?.data?.department?.[0]
-        || error.response?.data?.role?.[0]
-        || error.response?.data?.email?.[0]
+      const message = error.response?.data?.name?.[0]
+        || error.response?.data?.code?.[0]
         || error.response?.data?.detail
-        || 'Failed to update staff profile';
+        || 'Failed to save subject type';
       showSnackbar(message, 'error');
+    }
+  };
+
+  const handleDeleteSubjectType = async (type) => {
+    if (!window.confirm(`Delete subject type ${type.name}?`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/subject-types/${type.id}/`);
+      showSnackbar('Subject Type deleted successfully', 'success');
+      fetchData();
+    } catch (error) {
+      showSnackbar('Failed to delete subject type', 'error');
     }
   };
 
@@ -305,7 +306,7 @@ function AdminPanelPage() {
         Admin Panel
       </Typography>
       <Typography color="textSecondary" sx={{ mb: 3 }}>
-        Create and manage departments and staff accounts.
+        Configure college settings, departments, and subject types.
       </Typography>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -320,14 +321,7 @@ function AdminPanelPage() {
         <Grid item xs={12} md={4}>
           <Card variant="outlined">
             <CardContent>
-              <Typography color="textSecondary">Total Staff + HOD Accounts</Typography>
-              <Typography variant="h5">{staffUsers.length}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card variant="outlined">
-            <CardContent>
+
               <Typography color="textSecondary">Periods Per Day</Typography>
               <Typography variant="h5">{periodRows.length || 0}</Typography>
             </CardContent>
@@ -338,6 +332,14 @@ function AdminPanelPage() {
             <CardContent>
               <Typography color="textSecondary">Working Days Per Week</Typography>
               <Typography variant="h5">{workingDays || 0}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography color="textSecondary">Total Subject Types</Typography>
+              <Typography variant="h5">{subjectTypes.length}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -481,34 +483,42 @@ function AdminPanelPage() {
       </TableContainer>
 
       <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
-        Department Staff Accounts
+        Subject Types
       </Typography>
+      <Box sx={{ mb: 2 }}>
+        <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenSubjectTypeDialog()}>
+          Add Subject Type
+        </Button>
+      </Box>
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell>Code</TableCell>
               <TableCell>Name</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Department</TableCell>
-              <TableCell>Position</TableCell>
+              <TableCell>Description</TableCell>
+              <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {staffUsers.length === 0 ? (
+            {subjectTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">No staff accounts found</TableCell>
+                <TableCell colSpan={5} align="center">No subject types found</TableCell>
               </TableRow>
             ) : (
-              staffUsers.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell>{`${entry.first_name || ''} ${entry.last_name || ''}`.trim() || entry.username}</TableCell>
-                  <TableCell>{entry.email}</TableCell>
-                  <TableCell>{entry.department_name || '-'}</TableCell>
-                  <TableCell>{entry.role === 'HOD' ? 'HOD' : 'Staff'}</TableCell>
+              subjectTypes.map((type) => (
+                <TableRow key={type.id}>
+                  <TableCell>{type.code}</TableCell>
+                  <TableCell>{type.name}</TableCell>
+                  <TableCell>{type.description || '-'}</TableCell>
+                  <TableCell>{type.is_active ? 'Active' : 'Inactive'}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => handleOpenStaffEdit(entry)}>
+                    <IconButton size="small" onClick={() => handleOpenSubjectTypeDialog(type)}>
                       <Edit />
+                    </IconButton>
+                    <IconButton size="small" color="error" onClick={() => handleDeleteSubjectType(type)}>
+                      <Delete />
                     </IconButton>
                   </TableCell>
                 </TableRow>
@@ -518,91 +528,59 @@ function AdminPanelPage() {
         </Table>
       </TableContainer>
 
-      <Dialog open={openStaffDialog} onClose={() => setOpenStaffDialog(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Edit Staff Account</DialogTitle>
+      <Dialog open={openSubjectTypeDialog} onClose={() => setOpenSubjectTypeDialog(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{subjectTypeForm.id ? 'Edit Subject Type' : 'Add Subject Type'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={1} sx={{ mt: 0.5 }}>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
-                label="First Name"
+                label="Name"
                 fullWidth
-                value={staffEditForm.first_name}
-                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, first_name: e.target.value }))}
+                value={subjectTypeForm.name}
+                onChange={(e) => setSubjectTypeForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., Theory"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
-                label="Last Name"
+                label="Code"
                 fullWidth
-                value={staffEditForm.last_name}
-                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, last_name: e.target.value }))}
+                value={subjectTypeForm.code}
+                onChange={(e) => setSubjectTypeForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                placeholder="e.g., THY"
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                margin="dense"
-                label="Email"
-                fullWidth
-                value={staffEditForm.email}
-                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, email: e.target.value }))}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                margin="dense"
-                label="Phone"
-                fullWidth
-                value={staffEditForm.phone}
-                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, phone: e.target.value }))}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="dense">
-                <InputLabel>Position</InputLabel>
-                <Select
-                  label="Position"
-                  value={staffEditForm.role}
-                  onChange={(e) => setStaffEditForm((prev) => ({ ...prev, role: e.target.value }))}
-                >
-                  <MenuItem value="STAFF">Staff</MenuItem>
-                  <MenuItem value="HOD">HOD</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="dense">
-                <InputLabel>Department</InputLabel>
-                <Select
-                  label="Department"
-                  value={staffEditForm.department}
-                  onChange={(e) => setStaffEditForm((prev) => ({ ...prev, department: e.target.value }))}
-                >
-                  <MenuItem value="">No Department</MenuItem>
-                  {departments.map((department) => (
-                    <MenuItem key={department.id} value={department.id}>
-                      {department.code} - {department.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField
                 margin="dense"
-                label="New Password (optional)"
-                type="password"
+                label="Description"
                 fullWidth
-                value={staffEditForm.password}
-                onChange={(e) => setStaffEditForm((prev) => ({ ...prev, password: e.target.value }))}
+                multiline
+                rows={3}
+                value={subjectTypeForm.description}
+                onChange={(e) => setSubjectTypeForm((prev) => ({ ...prev, description: e.target.value }))}
               />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth margin="dense">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  label="Status"
+                  value={subjectTypeForm.is_active}
+                  onChange={(e) => setSubjectTypeForm((prev) => ({ ...prev, is_active: e.target.value }))}
+                >
+                  <MenuItem value={true}>Active</MenuItem>
+                  <MenuItem value={false}>Inactive</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenStaffDialog(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveStaffEdit}>Save</Button>
+          <Button onClick={() => setOpenSubjectTypeDialog(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveSubjectType}>Save</Button>
         </DialogActions>
       </Dialog>
 

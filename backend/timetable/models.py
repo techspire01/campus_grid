@@ -4,6 +4,23 @@ from core.models import College, Department, Lab, Class
 from accounts.models import User, Staff
 
 
+class SubjectType(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    code = models.CharField(max_length=20, unique=True)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'timetable_subject_type'
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+
+
 class Subject(models.Model):
     college = models.ForeignKey(College, on_delete=models.CASCADE, related_name='subjects')
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='subjects')
@@ -14,7 +31,24 @@ class Subject(models.Model):
     is_common = models.BooleanField(default=False)  # Tamil, English, Maths, etc.
     is_lab = models.BooleanField(default=False)
     
+    # New subject type as ForeignKey (null for backward compatibility during migration)
+    subject_type_fk = models.ForeignKey(SubjectType, on_delete=models.SET_NULL, null=True, blank=True, related_name='subjects')
+    # Old subject type field (will be deprecated)
+    subject_type_old = models.CharField(max_length=20, default='THEORY', null=True, blank=True)
+    
     hours_per_week = models.IntegerField(default=3)
+    
+    # Hours per day (6-day week: Monday to Saturday)
+    hours_monday = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(10)])
+    hours_tuesday = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(10)])
+    hours_wednesday = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(10)])
+    hours_thursday = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(10)])
+    hours_friday = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(10)])
+    hours_saturday = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(10)])
+    
+    # Total hours for the entire semester
+    total_semester_hours = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    
     year = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(4)], null=True, blank=True)
     semester = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(8)], null=True, blank=True)
     
@@ -27,6 +61,16 @@ class Subject(models.Model):
     class Meta:
         db_table = 'timetable_subject'
         unique_together = ('college', 'code')
+    
+    @property
+    def subject_type(self):
+        """Returns subject type ID for API compatibility"""
+        return self.subject_type_fk.id if self.subject_type_fk else None
+    
+    @property
+    def subject_type_display(self):
+        """Returns subject type name for display"""
+        return self.subject_type_fk.name if self.subject_type_fk else (self.subject_type_old or 'Theory')
     
     def __str__(self):
         return f"{self.name} ({self.code})"

@@ -6,12 +6,32 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from datetime import datetime, timedelta
 
-from timetable.models import Subject, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
+from timetable.models import Subject, SubjectType, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
 from timetable.serializers import (
-    SubjectSerializer, TimeSlotSerializer, TimetableEntrySerializer,
+    SubjectSerializer, SubjectTypeSerializer, TimeSlotSerializer, TimetableEntrySerializer,
     CommonTimetableSerializer, DepartmentTimetableSerializer, CollegeTimingSerializer
 )
 from core.permissions import IsSuperAdmin, IsSuperAdminOrCollegeAdmin, IsCollegeAdmin, IsHOD
+
+
+class SubjectTypeViewSet(viewsets.ModelViewSet):
+    """
+    CRUD operations for Subject Types.
+    Only Super Admin can create/update/delete.
+    All authenticated users can view.
+    """
+    queryset = SubjectType.objects.filter(is_active=True)
+    serializer_class = SubjectTypeSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'code']
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsSuperAdmin]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
 
 
 class SubjectViewSet(viewsets.ModelViewSet):

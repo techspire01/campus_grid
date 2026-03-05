@@ -67,6 +67,7 @@ function Layout({ children }) {
     { label: 'Subjects', icon: <BookIcon />, path: '/subjects', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
     { label: 'Labs', icon: <ScienceIcon />, path: '/labs', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
     { label: 'Classes', icon: <ClassIcon />, path: '/classes', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
+    { label: 'Staff', icon: <GroupWorkIcon />, path: '/staff', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
     { label: 'Common Timetable', icon: <ScheduleIcon />, path: '/common-timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN'] },
     { label: 'Department Timetable', icon: <GroupWorkIcon />, path: '/department-timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD'] },
     { label: 'Timetable Grid', icon: <ViewTimelineIcon />, path: '/timetable', roles: ['SUPER_ADMIN', 'COLLEGE_ADMIN', 'HOD'] },

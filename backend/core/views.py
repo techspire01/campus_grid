@@ -249,10 +249,24 @@ class ClassViewSet(viewsets.ModelViewSet):
         subject_code = str(request.data.get('code', '')).strip().upper()
         is_lab = bool(request.data.get('is_lab', False))
         hours_per_week = request.data.get('hours_per_week', 3)
+        total_semester_hours = request.data.get('total_semester_hours', 0)
+        subject_type_id = request.data.get('subject_type', None)
 
         if subject_id:
             try:
                 subject = Subject.objects.get(id=subject_id)
+                # Update hours fields if subject already exists and values are provided
+                if hours_per_week is not None and hours_per_week != '':
+                    subject.hours_per_week = int(hours_per_week) if hours_per_week else 3
+                if total_semester_hours is not None and total_semester_hours != '':
+                    subject.total_semester_hours = int(total_semester_hours) if total_semester_hours else 0
+                if subject_type_id:
+                    from timetable.models import SubjectType
+                    try:
+                        subject.subject_type_fk = SubjectType.objects.get(id=subject_type_id)
+                    except SubjectType.DoesNotExist:
+                        pass
+                subject.save()
             except Subject.DoesNotExist:
                 return Response({'error': 'Subject not found'}, status=status.HTTP_404_NOT_FOUND)
         else:
@@ -281,6 +295,21 @@ class ClassViewSet(viewsets.ModelViewSet):
                 except (TypeError, ValueError):
                     safe_hours = 3
 
+                safe_total_sem_hours = 0
+                try:
+                    safe_total_sem_hours = int(total_semester_hours)
+                except (TypeError, ValueError):
+                    safe_total_sem_hours = 0
+
+                # Get subject type object if provided
+                subject_type_obj = None
+                if subject_type_id:
+                    from timetable.models import SubjectType
+                    try:
+                        subject_type_obj = SubjectType.objects.get(id=subject_type_id)
+                    except SubjectType.DoesNotExist:
+                        pass
+
                 subject = Subject.objects.create(
                     college=college,
                     department=class_instance.department,
@@ -288,10 +317,25 @@ class ClassViewSet(viewsets.ModelViewSet):
                     code=subject_code or self._generate_subject_code(college, subject_name),
                     is_common=False,
                     is_lab=is_lab,
+                    subject_type_fk=subject_type_obj,
                     hours_per_week=max(1, safe_hours),
+                    total_semester_hours=safe_total_sem_hours,
                     year=class_instance.year,
                     semester=None,
                 )
+            else:
+                # Update existing subject with new hours if provided
+                if hours_per_week is not None and hours_per_week != '':
+                    subject.hours_per_week = int(hours_per_week) if hours_per_week else 3
+                if total_semester_hours is not None and total_semester_hours != '':
+                    subject.total_semester_hours = int(total_semester_hours) if total_semester_hours else 0
+                if subject_type_id:
+                    from timetable.models import SubjectType
+                    try:
+                        subject.subject_type_fk = SubjectType.objects.get(id=subject_type_id)
+                    except SubjectType.DoesNotExist:
+                        pass
+                subject.save()
 
         validation_error = self._validate_subject_for_class(class_instance, subject)
         if validation_error:
