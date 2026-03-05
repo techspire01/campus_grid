@@ -733,7 +733,6 @@ function ClassDetailPage() {
                 <TableRow>
                   <TableCell>Subject Code</TableCell>
                   <TableCell>Subject Name</TableCell>
-                  <TableCell>Type</TableCell>
                   <TableCell>Subject Type</TableCell>
                   <TableCell>Hours/Week</TableCell>
                   <TableCell>Total Sem Hours</TableCell>
@@ -748,13 +747,6 @@ function ClassDetailPage() {
                     <TableRow key={subject.id}>
                       <TableCell>{subject.code}</TableCell>
                       <TableCell>{subject.name}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={isCommon ? 'Common' : 'Regular'} 
-                          size="small" 
-                          color={isCommon ? 'primary' : 'default'}
-                        />
-                      </TableCell>
                       <TableCell>
                         <Chip 
                           label={subject.subject_type_display || subject.subject_type || 'Theory'} 

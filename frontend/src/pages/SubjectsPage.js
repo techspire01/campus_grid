@@ -14,12 +14,13 @@ function SubjectsPage() {
   const [subjects, setSubjects] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]);
+  const [subjectTypes, setSubjectTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [filters, setFilters] = useState({
     department: '',
-    is_common: '',
+    subject_type: '',
     is_lab: ''
   });
   const [formData, setFormData] = useState({
@@ -50,15 +51,17 @@ function SubjectsPage() {
     try {
       const params = new URLSearchParams();
       if (filters.department) params.append('department', filters.department);
-      if (filters.is_common !== '') params.append('is_common', filters.is_common);
+      if (filters.subject_type) params.append('subject_type', filters.subject_type);
       if (filters.is_lab !== '') params.append('is_lab', filters.is_lab);
       if (user?.college?.id) params.append('college', user.college.id);
-      const [deptsRes, staffRes] = await Promise.all([
+      const [deptsRes, staffRes, subjectTypesRes] = await Promise.all([
         api.get('/departments/'),
-        api.get('/staff/')
+        api.get('/staff/'),
+        api.get('/subject-types/')
       ]);
       setDepartments(deptsRes.data.results || deptsRes.data);
       setStaffMembers(staffRes.data.results || staffRes.data);
+      setSubjectTypes(subjectTypesRes.data.results || subjectTypesRes.data);
 
       let nextUrl = `/subjects/?${params.toString()}`;
       const collectedSubjects = [];
@@ -249,15 +252,16 @@ function SubjectsPage() {
           </Grid>
           <Grid item xs={6} md={3}>
             <FormControl fullWidth size="small">
-              <InputLabel>Type</InputLabel>
+              <InputLabel>Subject Type</InputLabel>
               <Select
-                value={filters.is_common}
-                label="Type"
-                onChange={(e) => handleFilterChange('is_common', e.target.value)}
+                value={filters.subject_type}
+                label="Subject Type"
+                onChange={(e) => handleFilterChange('subject_type', e.target.value)}
               >
                 <MenuItem value="">All</MenuItem>
-                <MenuItem value="true">Common</MenuItem>
-                <MenuItem value="false">Core</MenuItem>
+                {subjectTypes.map(type => (
+                  <MenuItem key={type.id} value={type.id}>{type.name}</MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
@@ -296,7 +300,7 @@ function SubjectsPage() {
             <TableRow>
               <TableCell>Code</TableCell>
               <TableCell>Name</TableCell>
-              <TableCell>Type</TableCell>
+              <TableCell>Subject Type</TableCell>
               <TableCell>Department</TableCell>
               <TableCell>Hours</TableCell>
               <TableCell>Lab</TableCell>
@@ -321,9 +325,9 @@ function SubjectsPage() {
                   <TableCell>{subject.name}</TableCell>
                   <TableCell>
                     <Chip
-                      label={subject.is_common ? 'Common' : 'Core'}
-                      color={subject.is_common ? 'primary' : 'secondary'}
+                      label={subject.subject_type_display || subject.subject_type || 'Theory'}
                       size="small"
+                      variant="outlined"
                     />
                   </TableCell>
                   <TableCell>{subject.department_name || 'All'}</TableCell>
