@@ -67,6 +67,16 @@ class ClassSerializer(serializers.ModelSerializer):
                 'code': mapping.subject.code,
                 'is_lab': mapping.subject.is_lab,
                 'hours_per_week': mapping.subject.hours_per_week,
+                'staff': mapping.subject.staff_id,
+                'staff_details': (
+                    {
+                        'id': mapping.subject.staff.id,
+                        'name': mapping.subject.staff.user.get_full_name(),
+                        'email': mapping.subject.staff.user.email,
+                        'department': mapping.subject.staff.department.name if mapping.subject.staff.department else None,
+                    }
+                    if mapping.subject.staff else None
+                ),
             }
             for mapping in obj.subject_mappings.select_related('subject').all().order_by('subject__name')
         ]

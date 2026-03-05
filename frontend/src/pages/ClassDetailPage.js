@@ -68,6 +68,7 @@ function ClassDetailPage() {
   const [editingSubject, setEditingSubject] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [savingStaff, setSavingStaff] = useState(false);
+  const [dialogIsLab, setDialogIsLab] = useState(false);
 
   useEffect(() => {
     if (classId) {
@@ -185,11 +186,13 @@ function ClassDetailPage() {
         subject_id: selectedId || null,
         name: typedName || null,
         code: typedCode || null,
+        is_lab: dialogIsLab,
       });
 
       setDialogSubjectName('');
       setDialogSubjectCode('');
       setDialogSubjectId(null);
+      setDialogIsLab(false);
       setDialogOpen(false);
       setSnackbar({ open: true, message: 'Subject added to class', severity: 'success' });
       fetchClassData();
@@ -213,6 +216,7 @@ function ClassDetailPage() {
     setDialogSubjectName('');
     setDialogSubjectCode('');
     setDialogSubjectId(null);
+    setDialogIsLab(false);
   };
 
   const handleDialogNameChange = (event, value) => {
@@ -331,7 +335,7 @@ function ClassDetailPage() {
   const handleCloseStaffDialog = () => {
     setStaffDialogOpen(false);
     setEditingSubject(null);
-    setSelectedStaff([]);
+    setSelectedStaff(null);
   };
 
   const handleAssignStaff = async () => {
@@ -339,16 +343,23 @@ function ClassDetailPage() {
 
     setSavingStaff(true);
     try {
-      await api.patch(`/subjects/${editingSubject.id}/`, {
-        staff: selectedStaff,
-      });
-
+      const endpoint = `/subjects/${editingSubject.id}/assign_staff/`;
+      const payload = { staff: selectedStaff };
+      
+      console.log('Sending request to:', endpoint);
+      console.log('Payload:', payload);
+      
+      const response = await api.post(endpoint, payload);
+      
+      console.log('Success response:', response.data);
       setSnackbar({ open: true, message: 'Staff assigned successfully', severity: 'success' });
       handleCloseStaffDialog();
       fetchClassData();
       fetchSubjects();
     } catch (error) {
-      const errorMessage = error.response?.data?.error || error.response?.data?.detail || 'Failed to assign staff';
+      console.error('Full error object:', error);
+      console.error('Error response:', error.response);
+      const errorMessage = error.response?.data?.error || error.response?.data?.detail || error.message || 'Failed to assign staff';
       setSnackbar({ open: true, message: errorMessage, severity: 'error' });
     } finally {
       setSavingStaff(false);
@@ -447,6 +458,15 @@ function ClassDetailPage() {
                 Selected: {dialogSubjectCode} - {dialogSubjectName}
               </Typography>
             )}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={dialogIsLab}
+                  onChange={(e) => setDialogIsLab(e.target.checked)}
+                />
+              }
+              label="Lab Practical Subject"
+            />
           </Stack>
         </DialogContent>
         <DialogActions>

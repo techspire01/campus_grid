@@ -199,6 +199,16 @@ class ClassViewSet(viewsets.ModelViewSet):
                 'hours_per_week': mapping.subject.hours_per_week,
                 'year': mapping.subject.year,
                 'semester': mapping.subject.semester,
+                'staff': mapping.subject.staff_id,
+                'staff_details': (
+                    {
+                        'id': mapping.subject.staff.id,
+                        'name': mapping.subject.staff.user.get_full_name(),
+                        'email': mapping.subject.staff.user.email,
+                        'department': mapping.subject.staff.department.name if mapping.subject.staff.department else None,
+                    }
+                    if mapping.subject.staff else None
+                ),
             }
             for mapping in assigned_subjects
         ])

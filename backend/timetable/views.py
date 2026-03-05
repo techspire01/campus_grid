@@ -91,6 +91,57 @@ class SubjectViewSet(viewsets.ModelViewSet):
             })
         
         serializer.save()
+    
+    @action(detail=True, methods=['post'])
+    def assign_staff(self, request, pk=None):
+        """Assign a staff member to a subject"""
+        try:
+            subject = self.get_object()
+            staff_id = request.data.get('staff')
+
+            # Allow explicit unassignment
+            if staff_id in [None, '']:
+                Subject.objects.filter(id=subject.id).update(staff_id=None)
+                subject.refresh_from_db()
+                serializer = self.get_serializer(subject)
+                return Response(
+                    {
+                        'message': 'Staff removed from subject',
+                        'subject': serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            from accounts.models import Staff
+            try:
+                staff = Staff.objects.get(id=staff_id)
+
+                # Same-college guard (when department is available)
+                if (
+                    subject.department
+                    and staff.department
+                    and subject.department.college_id != staff.department.college_id
+                ):
+                    return Response(
+                        {'error': 'Staff must belong to the same college as the subject'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Save directly in DB table to ensure persistence.
+                Subject.objects.filter(id=subject.id).update(staff_id=staff.id)
+                subject.refresh_from_db()
+                serializer = self.get_serializer(subject)
+                return Response(
+                    {
+                        'message': 'Staff assigned successfully',
+                        'subject': serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            except Staff.DoesNotExist:
+                return Response({'error': 'Staff member not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class TimeSlotViewSet(viewsets.ModelViewSet):

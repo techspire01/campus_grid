@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, IconButton, TextField, Dialog, DialogTitle,
   DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem,
-  Chip, Grid, Alert, Snackbar, FormControlLabel, Autocomplete
+  Chip, Grid, Alert, Snackbar, FormControlLabel, Autocomplete, CircularProgress
 } from '@mui/material';
 import { Add, Edit, Delete, FilterList } from '@mui/icons-material';
 import api from '../services/api';
@@ -36,6 +36,10 @@ function SubjectsPage() {
     staff: null
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [staffEditDialogOpen, setStaffEditDialogOpen] = useState(false);
+  const [staffEditingSubject, setStaffEditingSubject] = useState(null);
+  const [staffEditSelectedStaff, setStaffEditSelectedStaff] = useState(null);
+  const [staffEditSaving, setStaffEditSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -144,7 +148,8 @@ function SubjectsPage() {
         showSnackbar('Subject created successfully', 'success');
       }
       handleCloseDialog();
-      fetchData();
+      // Refetch data with a small delay to ensure backend is updated
+      setTimeout(() => fetchData(), 200);
     } catch (error) {
       console.error('Error saving subject:', error);
       showSnackbar(error.response?.data?.detail || 'Error saving subject', 'error');
@@ -169,6 +174,46 @@ function SubjectsPage() {
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleOpenStaffEditDialog = (subject) => {
+    setStaffEditingSubject(subject);
+    setStaffEditSelectedStaff(subject.staff || null);
+    setStaffEditDialogOpen(true);
+  };
+
+  const handleCloseStaffEditDialog = () => {
+    setStaffEditDialogOpen(false);
+    setStaffEditingSubject(null);
+    setStaffEditSelectedStaff(null);
+  };
+
+  const handleSaveStaff = async () => {
+    if (!staffEditingSubject) return;
+    
+    setStaffEditSaving(true);
+    try {
+      const endpoint = `/subjects/${staffEditingSubject.id}/assign_staff/`;
+      const payload = { staff: staffEditSelectedStaff };
+      
+      console.log('Sending request to:', endpoint);
+      console.log('Payload:', payload);
+      
+      const response = await api.post(endpoint, payload);
+      
+      console.log('Success response:', response.data);
+      showSnackbar('Staff assigned successfully', 'success');
+      handleCloseStaffEditDialog();
+      // Refetch data to ensure UI is updated
+      setTimeout(() => fetchData(), 200);
+    } catch (error) {
+      console.error('Full error object:', error);
+      console.error('Error response:', error.response);
+      const errorMessage = error.response?.data?.error || error.response?.data?.detail || error.message || 'Error assigning staff';
+      showSnackbar(errorMessage, 'error');
+    } finally {
+      setStaffEditSaving(false);
+    }
   };
 
   return (
@@ -292,15 +337,30 @@ function SubjectsPage() {
                   </TableCell>
                   <TableCell>{subject.year || 'All'}</TableCell>
                   <TableCell>
-                    {subject.staff_details ? (
-                      <Chip
-                        label={subject.staff_details.name}
-                        size="small"
-                        variant="outlined"
-                      />
-                    ) : (
-                      <Typography variant="body2" color="textSecondary">-</Typography>
-                    )}
+                    <Box
+                      onClick={() => handleOpenStaffEditDialog(subject)}
+                      sx={{
+                        cursor: 'pointer',
+                        '&:hover': {
+                          backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                          borderRadius: 1,
+                          padding: '4px',
+                        },
+                        padding: '4px',
+                        borderRadius: 1,
+                        transition: 'background-color 0.2s',
+                      }}
+                    >
+                      {subject.staff_details ? (
+                        <Chip
+                          label={subject.staff_details.name}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">Click to assign</Typography>
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell>
                     <IconButton onClick={() => handleOpenDialog(subject)} size="small">
@@ -449,6 +509,42 @@ function SubjectsPage() {
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={handleSubmit} variant="contained">
             {editingSubject ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Staff Edit Dialog */}
+      <Dialog open={staffEditDialogOpen} onClose={handleCloseStaffEditDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Assign Staff to {staffEditingSubject?.name}</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Select the staff member who handles this subject
+          </Typography>
+          <Autocomplete
+            fullWidth
+            options={staffMembers}
+            getOptionLabel={(option) => option.name || option.user?.username || ''}
+            value={staffEditSelectedStaff ? staffMembers.find(s => s.id === staffEditSelectedStaff) : null}
+            onChange={(event, newValue) => {
+              setStaffEditSelectedStaff(newValue ? newValue.id : null);
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Select Staff"
+                placeholder="Search and select a staff member"
+              />
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseStaffEditDialog}>Cancel</Button>
+          <Button 
+            onClick={handleSaveStaff} 
+            variant="contained"
+            disabled={staffEditSaving}
+          >
+            {staffEditSaving ? <CircularProgress size={20} color="inherit" /> : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>
