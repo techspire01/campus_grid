@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 
@@ -11,6 +12,29 @@ from core.serializers import CollegeSerializer, DepartmentSerializer, ClassSeria
 from core.permissions import IsSuperAdmin, IsSuperAdminOrCollegeAdmin
 from timetable.models import Subject, ClassSubjectMapping
 import re
+
+
+class APIRootView(APIView):
+    """Root API endpoint - provides status and available endpoints"""
+    
+    def get(self, request):
+        return Response({
+            'message': 'Campus Grid API is running',
+            'version': '1.0.0',
+            'endpoints': {
+                'admin': '/admin/',
+                'colleges': '/api/colleges/',
+                'departments': '/api/departments/',
+                'classes': '/api/classes/',
+                'users': '/api/users/',
+                'staff': '/api/staff/',
+                'subjects': '/api/subjects/',
+                'labs': '/api/labs/',
+                'timetable': '/api/timetable/',
+                'workload': '/api/workload/',
+                'approvals': '/api/approvals/',
+            }
+        })
 
 
 CLASS_SPECIAL_SUBJECTS = {
