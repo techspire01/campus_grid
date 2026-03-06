@@ -44,7 +44,7 @@ function AdminPanelPage() {
   const [openSubjectTypeDialog, setOpenSubjectTypeDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [timingId, setTimingId] = useState(null);
-  const [periodRows, setPeriodRows] = useState([{ id: 'row-1', start_time: null, end_time: null }]);
+  const [periodRows, setPeriodRows] = useState([{ id: 'row-1', start_time: null, end_time: null, period_type: 'regular' }]);
   const [savingTiming, setSavingTiming] = useState(false);
   const [workingDays, setWorkingDays] = useState(6);
   const [subjectTypeForm, setSubjectTypeForm] = useState({
@@ -88,12 +88,13 @@ function AdminPanelPage() {
             id: `loaded-${index + 1}`,
             start_time: row.start_time ? dayjs(`2000-01-01T${row.start_time}`) : null,
             end_time: row.end_time ? dayjs(`2000-01-01T${row.end_time}`) : null,
+            period_type: row.period_type || 'regular',
           }));
 
-          setPeriodRows(loadedRows.length ? loadedRows : [{ id: 'row-1', start_time: null, end_time: null }]);
+          setPeriodRows(loadedRows.length ? loadedRows : [{ id: 'row-1', start_time: null, end_time: null, period_type: 'regular' }]);
         } else {
           setTimingId(null);
-          setPeriodRows([{ id: 'row-1', start_time: null, end_time: null }]);
+          setPeriodRows([{ id: 'row-1', start_time: null, end_time: null, period_type: 'regular' }]);
         }
       }
     } catch (error) {
@@ -124,7 +125,7 @@ function AdminPanelPage() {
   const toTimeString = (value) => (value && dayjs(value).isValid() ? dayjs(value).format('HH:mm') : null);
 
   const handleAddPeriodRow = () => {
-    setPeriodRows((prev) => [...prev, { id: `row-${Date.now()}`, start_time: null, end_time: null }]);
+    setPeriodRows((prev) => [...prev, { id: `row-${Date.now()}`, start_time: null, end_time: null, period_type: 'regular' }]);
   };
 
   const handleRemovePeriodRow = (rowId) => {
@@ -157,6 +158,7 @@ function AdminPanelPage() {
       period_number: index + 1,
       start_time: toTimeString(row.start_time),
       end_time: toTimeString(row.end_time),
+      period_type: row.period_type || 'regular',
     }));
 
     const hasEmpty = normalizedPeriods.some((period) => !period.start_time || !period.end_time);
@@ -209,6 +211,7 @@ function AdminPanelPage() {
         periods: normalizedPeriods.map((period) => ({
           start_time: period.start_time,
           end_time: period.end_time,
+          period_type: period.period_type,
         })),
       });
 
@@ -216,8 +219,9 @@ function AdminPanelPage() {
         id: `saved-${index + 1}`,
         start_time: row.start_time ? dayjs(`2000-01-01T${row.start_time}`) : null,
         end_time: row.end_time ? dayjs(`2000-01-01T${row.end_time}`) : null,
+        period_type: row.period_type || 'regular',
       }));
-      setPeriodRows(savedRows.length ? savedRows : [{ id: 'row-1', start_time: null, end_time: null }]);
+      setPeriodRows(savedRows.length ? savedRows : [{ id: 'row-1', start_time: null, end_time: null, period_type: 'regular' }]);
 
       showSnackbar('College timing saved and slots generated successfully', 'success');
       fetchData();
@@ -283,6 +287,11 @@ function AdminPanelPage() {
   };
 
   const handleDeleteSubjectType = async (type) => {
+    if (type.code?.toUpperCase() === 'LAB' || type.name?.toLowerCase() === 'lab') {
+      showSnackbar('Lab subject type cannot be deleted', 'error');
+      return;
+    }
+
     if (!window.confirm(`Delete subject type ${type.name}?`)) {
       return;
     }
@@ -379,6 +388,7 @@ function AdminPanelPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Period</TableCell>
+                    <TableCell>Type</TableCell>
                     <TableCell>Start Time</TableCell>
                     <TableCell>End Time</TableCell>
                     <TableCell align="right">Action</TableCell>
@@ -388,6 +398,18 @@ function AdminPanelPage() {
                   {periodRows.map((row, index) => (
                     <TableRow key={row.id}>
                       <TableCell>{index + 1}</TableCell>
+                      <TableCell>
+                        <FormControl size="small" fullWidth>
+                          <Select
+                            value={row.period_type || 'regular'}
+                            onChange={(e) => handlePeriodTimeChange(row.id, 'period_type', e.target.value)}
+                          >
+                            <MenuItem value="regular">Regular</MenuItem>
+                            <MenuItem value="break">Break</MenuItem>
+                            <MenuItem value="lunch">Lunch</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
                       <TableCell>
                         <TimePicker
                           value={row.start_time}
@@ -511,7 +533,12 @@ function AdminPanelPage() {
                     <IconButton size="small" onClick={() => handleOpenSubjectTypeDialog(type)}>
                       <Edit />
                     </IconButton>
-                    <IconButton size="small" color="error" onClick={() => handleDeleteSubjectType(type)}>
+                    <IconButton 
+                      size="small" 
+                      color="error" 
+                      onClick={() => handleDeleteSubjectType(type)}
+                      disabled={type.code?.toUpperCase() === 'LAB' || type.name?.toLowerCase() === 'lab'}
+                    >
                       <Delete />
                     </IconButton>
                   </TableCell>

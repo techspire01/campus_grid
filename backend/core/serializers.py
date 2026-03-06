@@ -56,7 +56,7 @@ class ClassSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Class
-        fields = ['id', 'department', 'department_name', 'department_code', 'year', 'year_display', 'section', 'section_display', 'assigned_subjects', 'tutors', 'tutors_detail', 'created_at', 'updated_at']
+        fields = ['id', 'department', 'department_name', 'department_code', 'year', 'year_display', 'section', 'section_display', 'class_strength', 'assigned_subjects', 'tutors', 'tutors_detail', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_assigned_subjects(self, obj):

@@ -100,8 +100,15 @@ class TimeSlot(models.Model):
     period_number = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(10)])
     start_time = models.TimeField(null=True, blank=True)
     end_time = models.TimeField(null=True, blank=True)
+    period_type = models.CharField(
+        max_length=20,
+        choices=[('regular', 'Regular'), ('break', 'Break'), ('lunch', 'Lunch')],
+        default='regular',
+        help_text='Type of period: regular class, break, or lunch'
+    )
     
     is_common_locked = models.BooleanField(default=False)  # Prevents editing common slots
+    is_lab_locked = models.BooleanField(default=False)  # Prevents editing lab slots
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -144,6 +151,7 @@ class TimetableEntry(models.Model):
     lab = models.ForeignKey(Lab, on_delete=models.SET_NULL, null=True, blank=True, related_name='timetable_entries')
     
     is_common = models.BooleanField(default=False)
+    is_lab_timetable = models.BooleanField(default=False)  # Mark entries from lab timetable
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -163,6 +171,35 @@ class TimetableEntry(models.Model):
     
     def __str__(self):
         return f"{self.class_name} - {self.subject.name} ({self.timeslot})"
+
+
+class LabTimetable(models.Model):
+    """
+    Model to manage Lab Timetable generation and finalization.
+    Each lab has its own timetable that can be generated and finalized.
+    """
+    STATUS_CHOICES = (
+        ('DRAFT', 'Draft'),
+        ('GENERATED', 'Generated'),
+        ('FINALIZED', 'Finalized'),
+    )
+    
+    college = models.ForeignKey(College, on_delete=models.CASCADE, related_name='lab_timetables')
+    lab = models.ForeignKey(Lab, on_delete=models.CASCADE, related_name='timetables')
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
+    
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_lab_timetables')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'timetable_lab_timetable'
+        unique_together = ('college', 'lab')
+    
+    def __str__(self):
+        return f"{self.lab.name} - Lab Timetable ({self.status})"
 
 
 class CommonTimetable(models.Model):

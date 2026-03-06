@@ -78,6 +78,7 @@ class Class(models.Model):
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='classes')
     year = models.IntegerField(choices=YEAR_CHOICES)
     section = models.CharField(max_length=1, choices=SECTION_CHOICES)
+    class_strength = models.PositiveIntegerField(default=0)
     tutors = models.ManyToManyField('accounts.Staff', related_name='classes', blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)

@@ -4,7 +4,8 @@ from timetable.views import (
     SubjectViewSet, SubjectTypeViewSet, TimeSlotViewSet, TimetableEntryViewSet,
     CollegeTimingViewSet,
     CommonTimetableViewSet, DepartmentTimetableViewSet,
-    TimetableMergeViewSet, TimetableExportViewSet
+    TimetableMergeViewSet, TimetableExportViewSet,
+    LabTimetableViewSet
 )
 
 router = DefaultRouter()
@@ -15,6 +16,7 @@ router.register(r'college-timings', CollegeTimingViewSet, basename='college-timi
 router.register(r'timetable-entries', TimetableEntryViewSet, basename='timetable-entry')
 router.register(r'common-timetable', CommonTimetableViewSet, basename='common-timetable')
 router.register(r'department-timetable', DepartmentTimetableViewSet, basename='department-timetable')
+router.register(r'lab-timetable', LabTimetableViewSet, basename='lab-timetable')
 router.register(r'timetable/merged', TimetableMergeViewSet, basename='timetable-merged')
 router.register(r'timetable/export', TimetableExportViewSet, basename='timetable-export')
 

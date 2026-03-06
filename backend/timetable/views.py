@@ -6,12 +6,13 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from datetime import datetime, timedelta
 
-from timetable.models import Subject, SubjectType, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
+from timetable.models import Subject, SubjectType, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming, LabTimetable
 from timetable.serializers import (
     SubjectSerializer, SubjectTypeSerializer, TimeSlotSerializer, TimetableEntrySerializer,
-    CommonTimetableSerializer, DepartmentTimetableSerializer, CollegeTimingSerializer
+    CommonTimetableSerializer, DepartmentTimetableSerializer, CollegeTimingSerializer, LabTimetableSerializer
 )
 from core.permissions import IsSuperAdmin, IsSuperAdminOrCollegeAdmin, IsCollegeAdmin, IsHOD
+from core.models import Lab
 
 
 class SubjectTypeViewSet(viewsets.ModelViewSet):
@@ -228,6 +229,7 @@ class CollegeTimingViewSet(viewsets.ModelViewSet):
             for index, period in enumerate(manual_periods, start=1):
                 start_value = period.get('start_time') if isinstance(period, dict) else None
                 end_value = period.get('end_time') if isinstance(period, dict) else None
+                period_type = period.get('period_type', 'regular') if isinstance(period, dict) else 'regular'
 
                 if not start_value or not end_value:
                     return Response(
@@ -256,14 +258,14 @@ class CollegeTimingViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                split_periods.append((start_time, end_time))
+                split_periods.append((start_time, end_time, period_type))
         else:
             start_dt = datetime.combine(datetime.today(), timing.start_time)
             end_dt = datetime.combine(datetime.today(), timing.end_time)
             current = start_dt
             while current + timedelta(hours=1) <= end_dt:
                 next_hour = current + timedelta(hours=1)
-                split_periods.append((current.time(), next_hour.time()))
+                split_periods.append((current.time(), next_hour.time(), 'regular'))
                 current = next_hour
 
         if not split_periods:
@@ -276,7 +278,7 @@ class CollegeTimingViewSet(viewsets.ModelViewSet):
 
         created_slots = []
         for day in range(1, working_days + 1):
-            for period_number, (slot_start, slot_end) in enumerate(split_periods, start=1):
+            for period_number, (slot_start, slot_end, period_type) in enumerate(split_periods, start=1):
                 created_slots.append(
                     TimeSlot.objects.create(
                         college=college,
@@ -284,6 +286,7 @@ class CollegeTimingViewSet(viewsets.ModelViewSet):
                         period_number=period_number,
                         start_time=slot_start,
                         end_time=slot_end,
+                        period_type=period_type,
                         is_common_locked=False,
                     )
                 )
@@ -300,8 +303,9 @@ class CollegeTimingViewSet(viewsets.ModelViewSet):
                 'period_number': index,
                 'start_time': slot_start.strftime('%H:%M'),
                 'end_time': slot_end.strftime('%H:%M'),
+                'period_type': period_type,
             }
-            for index, (slot_start, slot_end) in enumerate(split_periods, start=1)
+            for index, (slot_start, slot_end, period_type) in enumerate(split_periods, start=1)
         ]
 
         return Response({
@@ -1364,4 +1368,638 @@ class TimetableExportViewSet(viewsets.ViewSet):
             {'error': 'Invalid format. Use csv, excel, or pdf'},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+class LabTimetableViewSet(viewsets.ModelViewSet):
+    """
+    Manage Lab Timetable - Individual lab timetable generation and management.
+    
+    Endpoints:
+    - GET /api/lab-timetable/ - List lab timetables
+    - POST /api/lab-timetable/generate/ - Generate lab timetable for a specific lab
+    - POST /api/lab-timetable/generate_all/ - Generate lab timetables for all labs at once
+    - POST /api/lab-timetable/finalize/ - Finalize lab timetable
+    - POST /api/lab-timetable/finalize_all/ - Finalize all lab timetables
+    - PATCH /api/lab-timetable/entries/{id}/move/ - Move lab entry to new slot
+    """
+    queryset = LabTimetable.objects.all()
+    serializer_class = LabTimetableSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['college', 'lab', 'status']
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_super_admin():
+            return LabTimetable.objects.all()
+        elif user.college:
+            return LabTimetable.objects.filter(college=user.college)
+        return LabTimetable.objects.none()
+    
+    def get_permissions(self):
+        if self.action in ['create', 'generate', 'generate_all', 'finalize', 'finalize_all']:
+            permission_classes = [IsSuperAdminOrCollegeAdmin]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
+    @action(detail=False, methods=['post'])
+    def generate_all(self, request):
+        """
+        Generate lab timetables for all labs in the college at once.
+        
+        Request:
+        {
+            "college_id": 1  (optional, uses user's college if not provided)
+        }
+        
+        Algorithm:
+        1. Get all available labs in the college
+        2. Get all lab subjects from workload assignments
+        3. Get classes with their strength (student count)
+        4. For each class with lab subjects:
+           - Find suitable lab based on capacity and equipment
+           - Allocate continuous slots (2-3 hours)
+           - Consider staff availability
+        5. Generate timetable entries for all labs
+        """
+        user = request.user
+        college_id = request.data.get('college_id')
+        
+        # Determine college
+        if college_id:
+            from core.models import College
+            try:
+                college = College.objects.get(id=college_id)
+            except College.DoesNotExist:
+                return Response({'error': 'College not found'}, status=status.HTTP_404_NOT_FOUND)
+        elif user.college:
+            college = user.college
+        else:
+            return Response({'error': 'College ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get all available labs in the college
+        labs = Lab.objects.filter(college=college, is_available=True)
+        
+        if not labs.exists():
+            return Response({'error': 'No labs found in this college'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get locked timeslots (common + department + already locked)
+        locked_timeslot_ids = TimeSlot.objects.filter(
+            Q(is_common_locked=True) | Q(is_lab_locked=True)
+        ).values_list('id', flat=True)
+        
+        # Get available timeslots
+        available_timeslots = TimeSlot.objects.filter(
+            college=college
+        ).exclude(id__in=locked_timeslot_ids).order_by('day_order', 'period_number')
+        
+        if not available_timeslots.exists():
+            return Response(
+                {'error': 'No available timeslots. Common or department timetable may have locked all slots.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get all lab subjects from workload assignments
+        from workload.models import WorkloadAssignment
+        lab_workloads = WorkloadAssignment.objects.filter(
+            subject__is_lab=True,
+            is_approved=True
+        ).select_related('subject', 'staff', 'department', 'subject__staff')
+        
+        # Group workloads by class
+        class_lab_assignments = {}
+        for workload in lab_workloads:
+            class_name = workload.class_name
+            if class_name not in class_lab_assignments:
+                class_lab_assignments[class_name] = []
+            
+            # Get class strength (from Class model if available)
+            class_strength = 30  # Default
+            try:
+                from core.models import Class
+                class_obj = Class.objects.filter(
+                    department=workload.department,
+                ).filter(
+                    models.Q(year=1) | models.Q(year=2) | models.Q(year=3)
+                ).first()
+                if class_obj:
+                    # Use department's default capacity
+                    class_strength = 30
+            except:
+                pass
+            
+            class_lab_assignments[class_name].append({
+                'subject': workload.subject,
+                'staff': workload.staff,
+                'class_name': class_name,
+                'department': workload.department,
+                'hours': workload.subject.hours_per_week,
+                'strength': class_strength
+            })
+        
+        if not class_lab_assignments:
+            return Response(
+                {'error': 'No lab subjects with approved workload found. Please assign workload first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Delete existing lab timetable entries for this college
+        TimetableEntry.objects.filter(
+            college=college,
+            is_lab_timetable=True
+        ).delete()
+        
+        # Clear existing lab timetables
+        LabTimetable.objects.filter(college=college).delete()
+        
+        entries_created = []
+        timeslot_list = list(available_timeslots)
+        
+        # Process each class's lab assignments
+        for class_name, lab_items in class_lab_assignments.items():
+            for lab_item in lab_items:
+                subject = lab_item['subject']
+                staff = lab_item['staff']
+                class_strength = lab_item['strength']
+                lab_hours = min(lab_item['hours'], 3)  # Max 3 hours per session
+                
+                # Find suitable lab based on capacity
+                suitable_lab = None
+                for lab in labs:
+                    if lab.capacity >= class_strength:
+                        suitable_lab = lab
+                        break
+                
+                if not suitable_lab:
+                    continue  # Skip if no suitable lab found
+                
+                # Find continuous slots for this lab
+                for slot_idx in range(len(timeslot_list) - lab_hours + 1):
+                    can_allocate = True
+                    selected_slots = []
+                    
+                    for h in range(int(lab_hours)):
+                        if slot_idx + h >= len(timeslot_list):
+                            can_allocate = False
+                            break
+                            
+                        slot = timeslot_list[slot_idx + h]
+                        
+                        # Check if slot is already used by staff
+                        if staff and TimetableEntry.objects.filter(
+                            college=college,
+                            timeslot=slot,
+                            staff=staff
+                        ).exists():
+                            can_allocate = False
+                            break
+                        
+                        # Check if slot is already used by class
+                        if TimetableEntry.objects.filter(
+                            college=college,
+                            timeslot=slot,
+                            class_name=class_name
+                        ).exists():
+                            can_allocate = False
+                            break
+                        
+                        # Check if lab is already used at this time
+                        if TimetableEntry.objects.filter(
+                            college=college,
+                            timeslot=slot,
+                            lab=suitable_lab
+                        ).exists():
+                            can_allocate = False
+                            break
+                        
+                        selected_slots.append(slot)
+                    
+                    if can_allocate and selected_slots:
+                        # Create entries for all continuous slots
+                        for slot in selected_slots:
+                            entry = TimetableEntry.objects.create(
+                                college=college,
+                                class_name=class_name,
+                                subject=subject,
+                                staff=staff,
+                                timeslot=slot,
+                                lab=suitable_lab,
+                                department=lab_item['department'],
+                                is_common=False,
+                                is_lab_timetable=True
+                            )
+                            entries_created.append(entry)
+                        
+                        # Remove used slots from available list
+                        for slot in selected_slots:
+                            if slot in timeslot_list:
+                                timeslot_list.remove(slot)
+                        
+                        break
+        
+        # Create lab timetable records for each lab
+        labs_updated = []
+        for lab in labs:
+            lab_tt, _ = LabTimetable.objects.get_or_create(
+                lab=lab,
+                defaults={
+                    'college': college,
+                    'status': 'GENERATED',
+                    'created_by': request.user
+                }
+            )
+            lab_tt.status = 'GENERATED'
+            lab_tt.save()
+            labs_updated.append({
+                'lab_id': lab.id,
+                'lab_name': lab.name,
+                'lab_code': lab.code
+            })
+        
+        return Response({
+            'message': f'Generated {len(entries_created)} lab timetable entries for {len(labs_updated)} labs',
+            'labs': labs_updated,
+            'entries_count': len(entries_created),
+            'available_slots_remaining': len(timeslot_list)
+        })
+    
+    @action(detail=False, methods=['post'])
+    def finalize_all(self, request):
+        """
+        Finalize all lab timetables in the college.
+        This will lock the timeslots and show in all class timetables.
+        
+        Request:
+        {
+            "college_id": 1  (optional, uses user's college if not provided)
+        }
+        """
+        user = request.user
+        college_id = request.data.get('college_id')
+        
+        # Determine college
+        if college_id:
+            from core.models import College
+            try:
+                college = College.objects.get(id=college_id)
+            except College.DoesNotExist:
+                return Response({'error': 'College not found'}, status=status.HTTP_404_NOT_FOUND)
+        elif user.college:
+            college = user.college
+        else:
+            return Response({'error': 'College ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get all lab timetables for this college
+        lab_timetables = LabTimetable.objects.filter(college=college)
+        
+        if not lab_timetables.exists():
+            return Response({'error': 'No lab timetables found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Lock all timeslots used by lab timetables
+        lab_entry_timeslots = TimetableEntry.objects.filter(
+            college=college,
+            is_lab_timetable=True
+        ).values_list('timeslot_id', flat=True)
+        
+        TimeSlot.objects.filter(id__in=lab_entry_timeslots).update(is_lab_locked=True)
+        
+        # Update all lab timetable statuses to FINALIZED
+        for lab_tt in lab_timetables:
+            lab_tt.status = 'FINALIZED'
+            lab_tt.save()
+        
+        return Response({
+            'message': f'Finalized {lab_timetables.count()} lab timetables successfully',
+            'labs_finalized': lab_timetables.count()
+        })
+    
+    @action(detail=False, methods=['post'])
+    def generate(self, request):
+        """
+        Generate lab timetable for a specific lab.
+        
+        Request:
+        {
+            "lab_id": 1
+        }
+        
+        Algorithm:
+        1. Get lab and its associated subjects (lab subjects from workload)
+        2. Get available timeslots (not locked by common or department)
+        3. Allocate continuous slots (2-3 hours) for each lab subject
+        4. Consider staff workload and availability
+        5. Consider lab availability
+        """
+        lab_id = request.data.get('lab_id')
+        
+        if not lab_id:
+            return Response({'error': 'lab_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            lab = Lab.objects.get(id=lab_id)
+        except Lab.DoesNotExist:
+            return Response({'error': 'Lab not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        college = lab.college
+        
+        # Get locked timeslots (common + department)
+        locked_timeslot_ids = TimeSlot.objects.filter(
+            Q(is_common_locked=True) | Q(is_lab_locked=True)
+        ).values_list('id', flat=True)
+        
+        # Get available timeslots for this college
+        available_timeslots = TimeSlot.objects.filter(
+            college=college
+        ).exclude(id__in=locked_timeslot_ids).order_by('day_order', 'period_number')
+        
+        if not available_timeslots.exists():
+            return Response(
+                {'error': 'No available timeslots. Common or department timetable may have locked all slots.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get lab subjects from workload assignments for this lab
+        from workload.models import WorkloadAssignment
+        lab_workloads = WorkloadAssignment.objects.filter(
+            subject__is_lab=True,
+            is_approved=True
+        ).select_related('subject', 'staff', 'department')
+        
+        # Filter workloads that can use this lab (same department or no department restriction)
+        lab_subjects = []
+        for workload in lab_workloads:
+            if workload.subject and workload.staff:
+                lab_subjects.append({
+                    'subject': workload.subject,
+                    'staff': workload.staff,
+                    'class_name': workload.class_name,
+                    'hours': workload.subject.hours_per_week
+                })
+        
+        if not lab_subjects:
+            return Response(
+                {'error': 'No lab subjects with approved workload found. Please assign workload first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Delete existing lab timetable entries for this lab
+        TimetableEntry.objects.filter(
+            lab=lab,
+            is_lab_timetable=True
+        ).delete()
+        
+        entries_created = []
+        timeslot_list = list(available_timeslots)
+        
+        # Allocate lab subjects in continuous slots
+        for lab_item in lab_subjects:
+            subject = lab_item['subject']
+            staff = lab_item['staff']
+            class_name = lab_item['class_name']
+            lab_hours = min(lab_item['hours'], 3)  # Max 3 hours per session
+            
+            # Find continuous slots for this lab
+            for slot_idx in range(len(timeslot_list) - lab_hours + 1):
+                can_allocate = True
+                selected_slots = []
+                
+                # Check if we can allocate continuous slots
+                for h in range(int(lab_hours)):
+                    slot = timeslot_list[slot_idx + h]
+                    
+                    # Check if slot is already used by staff
+                    if TimetableEntry.objects.filter(
+                        college=college,
+                        timeslot=slot,
+                        staff=staff
+                    ).exists():
+                        can_allocate = False
+                        break
+                    
+                    # Check if slot is already used by class
+                    if TimetableEntry.objects.filter(
+                        college=college,
+                        timeslot=slot,
+                        class_name=class_name
+                    ).exists():
+                        can_allocate = False
+                        break
+                    
+                    selected_slots.append(slot)
+                
+                if can_allocate and selected_slots:
+                    # Create entries for all continuous slots
+                    for slot in selected_slots:
+                        entry = TimetableEntry.objects.create(
+                            college=college,
+                            class_name=class_name,
+                            subject=subject,
+                            staff=staff,
+                            timeslot=slot,
+                            lab=lab,
+                            is_common=False,
+                            is_lab_timetable=True
+                        )
+                        entries_created.append(entry)
+                    
+                    # Remove used slots from available list
+                    for slot in selected_slots:
+                        if slot in timeslot_list:
+                            timeslot_list.remove(slot)
+                    
+                    break
+        
+        # Create or update lab timetable record
+        lab_tt, _ = LabTimetable.objects.get_or_create(
+            lab=lab,
+            defaults={
+                'college': college,
+                'status': 'GENERATED',
+                'created_by': request.user
+            }
+        )
+        lab_tt.status = 'GENERATED'
+        lab_tt.save()
+        
+        serializer = self.get_serializer(lab_tt)
+        return Response({
+            'message': f'Generated {len(entries_created)} lab timetable entries',
+            'lab_timetable': serializer.data,
+            'entries_count': len(entries_created)
+        })
+    
+    @action(detail=False, methods=['post'])
+    def finalize(self, request):
+        """
+        Finalize lab timetable.
+        This will lock the timeslots and show in all class timetables.
+        """
+        lab_id = request.data.get('lab_id')
+        
+        if not lab_id:
+            return Response({'error': 'lab_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            lab = Lab.objects.get(id=lab_id)
+        except Lab.DoesNotExist:
+            return Response({'error': 'Lab not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            lab_tt = LabTimetable.objects.get(lab=lab)
+        except LabTimetable.DoesNotExist:
+            return Response(
+                {'error': 'Lab timetable not found. Please generate it first.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if lab_tt.status == 'FINALIZED':
+            return Response(
+                {'error': 'Lab timetable is already finalized'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Lock timeslots used by this lab timetable
+        lab_entry_timeslots = TimetableEntry.objects.filter(
+            lab=lab,
+            is_lab_timetable=True
+        ).values_list('timeslot_id', flat=True)
+        
+        TimeSlot.objects.filter(id__in=lab_entry_timeslots).update(is_lab_locked=True)
+        
+        # Update lab timetable status
+        lab_tt.status = 'FINALIZED'
+        lab_tt.save()
+        
+        serializer = self.get_serializer(lab_tt)
+        return Response({
+            'message': 'Lab timetable finalized successfully',
+            'lab_timetable': serializer.data
+        })
+    
+    @action(detail=True, methods=['patch'])
+    def move_entry(self, request, pk=None):
+        """
+        Move a lab timetable entry to a new time slot.
+        
+        Request:
+        {
+            "timeslot_id": 10
+        }
+        """
+        entry_id = pk
+        new_timeslot_id = request.data.get('timeslot_id')
+        
+        if not new_timeslot_id:
+            return Response(
+                {'error': 'timeslot_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            entry = TimetableEntry.objects.get(id=entry_id, is_lab_timetable=True)
+        except TimetableEntry.DoesNotExist:
+            return Response(
+                {'error': 'Lab timetable entry not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            new_timeslot = TimeSlot.objects.get(id=new_timeslot_id)
+        except TimeSlot.DoesNotExist:
+            return Response(
+                {'error': 'Time slot not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if new slot is locked
+        if new_timeslot.is_common_locked or new_timeslot.is_lab_locked:
+            return Response({
+                'valid': False,
+                'errors': ['Cannot move to a locked time slot']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check for conflicts
+        errors = []
+        
+        # Check staff availability
+        if entry.staff:
+            staff_clash = TimetableEntry.objects.filter(
+                college=entry.college,
+                timeslot=new_timeslot,
+                staff=entry.staff
+            ).exclude(id=entry.id).exists()
+            
+            if staff_clash:
+                errors.append(f"Staff {entry.staff.user.get_full_name()} is already assigned to another class at this time")
+        
+        # Check class availability
+        class_clash = TimetableEntry.objects.filter(
+            college=entry.college,
+            timeslot=new_timeslot,
+            class_name=entry.class_name
+        ).exclude(id=entry.id).exists()
+        
+        if class_clash:
+            errors.append(f"Class {entry.class_name} already has a subject at this time")
+        
+        # Check lab availability (for other labs)
+        lab_clash = TimetableEntry.objects.filter(
+            college=entry.college,
+            timeslot=new_timeslot,
+            lab__isnull=False
+        ).exclude(lab=entry.lab, id=entry.id).exists()
+        
+        if lab_clash:
+            errors.append("Another lab is already scheduled at this time")
+        
+        if errors:
+            return Response({
+                'valid': False,
+                'errors': errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Move the entry
+        entry.timeslot = new_timeslot
+        entry.save()
+        
+        serializer = TimetableEntrySerializer(entry)
+        return Response({
+            'valid': True,
+            'entry': serializer.data,
+            'message': 'Entry moved successfully'
+        })
+    
+    @action(detail=False, methods=['get'])
+    def entries(self, request):
+        """
+        Get lab timetable entries for a specific lab.
+        
+        Query params:
+        - lab_id: Lab ID
+        """
+        lab_id = request.query_params.get('lab_id')
+        
+        if not lab_id:
+            return Response({'error': 'lab_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            lab = Lab.objects.get(id=lab_id)
+        except Lab.DoesNotExist:
+            return Response({'error': 'Lab not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        entries = TimetableEntry.objects.filter(
+            lab=lab,
+            is_lab_timetable=True
+        ).select_related('subject', 'staff__user', 'timeslot', 'department').order_by(
+            'timeslot__day_order', 'timeslot__period_number'
+        )
+        
+        serializer = TimetableEntrySerializer(entries, many=True)
+        return Response({
+            'lab_id': lab.id,
+            'lab_name': lab.name,
+            'entries': serializer.data,
+            'count': len(serializer.data)
+        })
 

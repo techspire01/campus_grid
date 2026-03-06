@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from datetime import datetime
-from timetable.models import Subject, SubjectType, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming
+from timetable.models import Subject, SubjectType, TimeSlot, TimetableEntry, CommonTimetable, DepartmentTimetable, CollegeTiming, LabTimetable
 
 
 class SubjectTypeSerializer(serializers.ModelSerializer):
@@ -46,7 +46,7 @@ class TimeSlotSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = TimeSlot
-        fields = ['id', 'college', 'day_order', 'day_name', 'period_number', 'start_time', 'end_time', 'period_label', 'is_common_locked', 'created_at', 'updated_at']
+        fields = ['id', 'college', 'day_order', 'day_name', 'period_number', 'start_time', 'end_time', 'period_type', 'period_label', 'is_common_locked', 'is_lab_locked', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
     
     def get_day_name(self, obj):
@@ -84,6 +84,7 @@ class CollegeTimingSerializer(serializers.ModelSerializer):
                     'period_number': slot.period_number,
                     'start_time': slot.start_time.strftime('%H:%M'),
                     'end_time': slot.end_time.strftime('%H:%M'),
+                    'period_type': slot.period_type,
                 })
         return slots
 
@@ -98,7 +99,7 @@ class TimetableEntrySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = TimetableEntry
-        fields = ['id', 'college', 'department', 'class_name', 'class_name_display', 'subject', 'subject_name', 'subject_code', 'staff', 'staff_name', 'timeslot', 'day_name', 'lab', 'lab_name', 'is_common', 'created_at', 'updated_at']
+        fields = ['id', 'college', 'department', 'class_name', 'class_name_display', 'subject', 'subject_name', 'subject_code', 'staff', 'staff_name', 'timeslot', 'day_name', 'lab', 'lab_name', 'is_common', 'is_lab_timetable', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
     
     def get_day_name(self, obj):
@@ -135,3 +136,19 @@ class DepartmentTimetableSerializer(serializers.ModelSerializer):
     
     def get_entries_count(self, obj):
         return obj.college.timetable_entries.filter(department=obj.department, is_common=False).count()
+
+
+class LabTimetableSerializer(serializers.ModelSerializer):
+    college_name = serializers.CharField(source='college.name', read_only=True)
+    lab_name = serializers.CharField(source='lab.name', read_only=True)
+    lab_code = serializers.CharField(source='lab.code', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, allow_null=True)
+    entries_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = LabTimetable
+        fields = ['id', 'college', 'college_name', 'lab', 'lab_name', 'lab_code', 'status', 'created_by', 'created_by_name', 'entries_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_entries_count(self, obj):
+        return obj.college.timetable_entries.filter(lab=obj.lab, is_lab_timetable=True).count()

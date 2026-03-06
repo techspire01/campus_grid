@@ -18,6 +18,7 @@ import ClassesPage from './pages/ClassesPage';
 import ClassDetailPage from './pages/ClassDetailPage';
 import CommonTimetablePage from './pages/CommonTimetablePage';
 import DepartmentTimetablePage from './pages/DepartmentTimetablePage';
+import LabTimetablePage from './pages/LabTimetablePage';
 import FinalTimetablePage from './pages/FinalTimetablePage';
 
 // Components
@@ -81,6 +82,7 @@ function App() {
                     <Route path="/classes/:classId" element={<ClassDetailPage />} />
                     <Route path="/common-timetable" element={<CommonTimetablePage />} />
                     <Route path="/department-timetable" element={<DepartmentTimetablePage />} />
+                    <Route path="/lab-timetable" element={<LabTimetablePage />} />
                     <Route path="/timetable" element={<TimetableGridPage />} />
                     <Route path="/final-timetable" element={<FinalTimetablePage />} />
                     <Route path="/approvals" element={<ApprovalPage />} />

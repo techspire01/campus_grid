@@ -70,6 +70,8 @@ function ClassDetailPage() {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [savingStaff, setSavingStaff] = useState(false);
   const [dialogIsLab, setDialogIsLab] = useState(false);
+  const [classStrength, setClassStrength] = useState('0');
+  const [savingClassStrength, setSavingClassStrength] = useState(false);
   
   // Hours fields
   const [hoursPerWeek, setHoursPerWeek] = useState(0);
@@ -96,6 +98,7 @@ function ClassDetailPage() {
       const response = await api.get(`/classes/${classId}/`);
       const classEntry = response.data;
       setClassData(classEntry);
+      setClassStrength(String(classEntry.class_strength ?? 0));
 
       const selectedCodes = (classEntry.assigned_subjects || [])
         .map((subject) => String(subject.code || '').toUpperCase())
@@ -105,6 +108,27 @@ function ClassDetailPage() {
       setSnackbar({ open: true, message: 'Failed to load class details', severity: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveClassStrength = async () => {
+    const normalizedValue = Number(classStrength);
+    if (!Number.isInteger(normalizedValue) || normalizedValue < 0) {
+      setSnackbar({ open: true, message: 'Class strength must be a non-negative integer', severity: 'error' });
+      return;
+    }
+
+    setSavingClassStrength(true);
+    try {
+      await api.patch(`/classes/${classId}/`, {
+        class_strength: normalizedValue,
+      });
+      setSnackbar({ open: true, message: 'Class strength updated', severity: 'success' });
+      fetchClassData();
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Failed to update class strength', severity: 'error' });
+    } finally {
+      setSavingClassStrength(false);
     }
   };
 
@@ -428,6 +452,29 @@ function ClassDetailPage() {
           ? `${classData.department_code} - ${classData.year_display || `Year ${classData.year}`} - ${classData.section_display || classData.section}`
           : 'Loading class details...'}
       </Typography>
+
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Class Strength
+        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+          <TextField
+            label="Class Strength"
+            type="number"
+            value={classStrength}
+            onChange={(e) => setClassStrength(e.target.value)}
+            inputProps={{ min: 0, step: 1 }}
+            sx={{ maxWidth: 220 }}
+          />
+          <Button
+            variant="contained"
+            onClick={handleSaveClassStrength}
+            disabled={savingClassStrength}
+          >
+            {savingClassStrength ? 'Saving...' : 'Save Strength'}
+          </Button>
+        </Stack>
+      </Paper>
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
