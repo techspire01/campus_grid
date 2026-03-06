@@ -1427,8 +1427,8 @@ class LabTimetableViewSet(viewsets.ModelViewSet):
         college_id = request.data.get('college_id')
         
         # Determine college
+        from core.models import College
         if college_id:
-            from core.models import College
             try:
                 college = College.objects.get(id=college_id)
             except College.DoesNotExist:
@@ -1436,7 +1436,10 @@ class LabTimetableViewSet(viewsets.ModelViewSet):
         elif user.college:
             college = user.college
         else:
-            return Response({'error': 'College ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            # Default to first college for super admins
+            college = College.objects.order_by('id').first()
+            if not college:
+                return Response({'error': 'No colleges found in the system'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get all available labs in the college
         labs = Lab.objects.filter(college=college, is_available=True)
@@ -1639,8 +1642,8 @@ class LabTimetableViewSet(viewsets.ModelViewSet):
         college_id = request.data.get('college_id')
         
         # Determine college
+        from core.models import College
         if college_id:
-            from core.models import College
             try:
                 college = College.objects.get(id=college_id)
             except College.DoesNotExist:
@@ -1648,7 +1651,10 @@ class LabTimetableViewSet(viewsets.ModelViewSet):
         elif user.college:
             college = user.college
         else:
-            return Response({'error': 'College ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            # Default to first college for super admins
+            college = College.objects.order_by('id').first()
+            if not college:
+                return Response({'error': 'No colleges found in the system'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get all lab timetables for this college
         lab_timetables = LabTimetable.objects.filter(college=college)

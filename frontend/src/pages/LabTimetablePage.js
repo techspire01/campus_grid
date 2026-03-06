@@ -86,9 +86,11 @@ function LabTimetablePage() {
     setGenerating(true);
     setGenerationResult(null);
     try {
-      const res = await api.post('/lab-timetable/generate_all/', {
-        college_id: user.college.id
-      });
+      const payload = {};
+      if (user?.college?.id) {
+        payload.college_id = user.college.id;
+      }
+      const res = await api.post('/lab-timetable/generate_all/', payload);
       setGenerationResult(res.data);
       showSnackbar(res.data.message || 'All lab timetables generated successfully', 'success');
       fetchLabTimetables();
@@ -104,9 +106,11 @@ function LabTimetablePage() {
   const handleFinalizeAll = async () => {
     setFinalizing(true);
     try {
-      const res = await api.post('/lab-timetable/finalize_all/', {
-        college_id: user.college.id
-      });
+      const payload = {};
+      if (user?.college?.id) {
+        payload.college_id = user.college.id;
+      }
+      const res = await api.post('/lab-timetable/finalize_all/', payload);
       showSnackbar(res.data.message || 'All lab timetables finalized successfully', 'success');
       fetchLabTimetables();
     } catch (error) {
@@ -199,6 +203,7 @@ function LabTimetablePage() {
               </Select>
             </FormControl>
           </Grid>
+        </Grid>
 
         {generationResult && (
           <Alert severity="info" sx={{ mt: 2 }}>
@@ -222,6 +227,7 @@ function LabTimetablePage() {
                     <Typography variant="subtitle2" color="textSecondary">Total Labs</Typography>
                     <Typography variant="h5">{labs.length}</Typography>
                   </Box>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
@@ -234,6 +240,7 @@ function LabTimetablePage() {
                     <Typography variant="subtitle2" color="textSecondary">Total Entries</Typography>
                     <Typography variant="h5">{entries.length}</Typography>
                   </Box>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
@@ -248,6 +255,7 @@ function LabTimetablePage() {
                       {timeslots.filter(t => !t.is_common_locked && !t.is_lab_locked).length}
                     </Typography>
                   </Box>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
@@ -263,6 +271,7 @@ function LabTimetablePage() {
               </CardContent>
             </Card>
           </Grid>
+        </Grid>
 
         {labTimetables.length > 0 && (
           <Box>
